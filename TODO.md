@@ -17,6 +17,9 @@ changing shape underneath them.
 
 ## v1 — finish the engine
 
+Nothing left. §§1-5 and 9 are in Done below; the engine work is complete and
+the three remaining v1 items are the documentation ones, deliberately last.
+
 ---
 
 ## Anytime
@@ -197,3 +200,94 @@ number nobody measured. The reader decides.
 Honest caveat, carried in the tooltip: ttft also includes a model reload and queue
 wait, so a single outlier can be a load rather than a budget problem — which is why
 the median and mean sit beside it.
+
+---
+
+# Roadmap
+
+The goal is a locally hosted equivalent of OOC.ai, so parity with its features
+comes before anything new. The thesis is a **lived-in world**: somewhere a player
+returns to for weeks, rather than a character they try for two days and replace.
+That is what justifies a long setup — a cast with one portrait each does not sell
+"these are real people"; a cast with a full expression set does.
+
+## v1.1 — the settings assistant
+
+Natural-language intent to settings changes: "I want more creative prose", "longer
+replies". The parts already exist — `settings.current()` returns all 55 knobs with
+label, help, bounds and current value, which is a tool schema; `brain.utility()`
+already does provider-native structured JSON; `settings.update()` validates
+atomically and raises, so a bad proposal fails safely.
+
+**It must diagnose before it adjusts, and propose rather than apply.** The worked
+example is real: asked for "more creative prose" on 2026-10-05, a knob-twiddler
+would have raised temperature from 0.7, declared success, and left `rules` dropping
+the story's world details on every turn — masking the actual fault. loom already
+knew (`advice` said so plainly); nobody was looking at that panel. So the assistant
+reads the live allocation, `dropped` counts, fill and the ttft/gen timings, explains
+what it found, and offers the change as a diff to confirm.
+
+Scope it hard: settings only. Read-only on stories and the database.
+
+Uses the configured prose model — a GGUF cannot ship in a repo, and the model is
+already resident, so this costs no extra memory and no extra download.
+
+## v1.2 — character sprites and per-line faces
+
+### What already exists
+
+`images.py` runs a single background worker draining a queue, entirely off the turn
+loop (20-40s a render, never in the critical path). Portraits are cached per
+character name forever. `portrait_prompt()` / `set_portrait_prompt()` let a player
+describe a character the story does not define. `_render()` already takes a seed and
+a checkpoint. Rendering happens on atlas's 4070 via `LOOM_COMFY_URL`, which is the
+right split: that card beats Strix Halo at SDXL, and it keeps image generation out
+of the LLM's memory entirely.
+
+### The blocker: character identity, not image count
+
+The ComfyUI workflow is a hardcoded six-node graph — checkpoint, two text encodes,
+empty latent, sampler, decode, save. No LoRA, no IP-Adapter, no reference image.
+
+28 expressions at 20-40s is 9-19 minutes a character, and an hour for a party of
+four. That cost is acceptable and is the point. **The risk is that the 28 images do
+not look like the same person.** Fixed seed plus a varied expression phrase drifts
+on hair, face shape and clothing, and a cast whose faces change between lines sells
+the opposite of "lived in".
+
+The fix matches the flow already described: the player picks one option, and **that
+image becomes the identity anchor** — fed back as an IP-Adapter reference for the
+expression set. That needs the workflow to stop being one hardcoded graph, which is
+already a listed known gap in the README. **It is the critical path for this whole
+feature** and should be done first, on its own, with one character as the test.
+
+### The flow
+
+1. At setup, describe a character; generate several options in parallel.
+2. The player picks one. It is stored as that character's reference.
+3. The expression set renders in the background off the selected reference.
+4. Dialogue lines display the matching expression.
+
+### Per-line faces
+
+OOC.ai puts the portrait **above** its dialogue rather than inline, which is why it
+reads as a cast speaking rather than a novel describing. That needs speaker-attributed
+output, and loom has no mechanism for it today: every prose instruction lives in a
+story's own `rules`, and there is no shipped global format directive.
+
+Two things to resolve:
+
+- **Where the directive lives.** A format every story inherits is new — probably a
+  shipped layer ahead of `rules`, not something each story restates.
+- **It pulls against existing story rules.** Seiran's say "Your narration is clean
+  prose — never asterisks around actions". A per-speaker block format is structure
+  imposed on prose that was explicitly told to be unstructured. Those have to be
+  reconciled deliberately, not by having the format quietly win.
+
+### Mode consolidation
+
+Settle on `play` (CYOA) and hide `raw` and `narrative` in the editor until they are
+developed further. Hiding the option does not break existing stories — the field
+still parses, so goblin-road, laundry-and-taxes and reverse-isekai (`raw`) and
+kindling (`narrative`) keep working. They simply stop being creatable, and the
+sprite work has one mode to target instead of three.
