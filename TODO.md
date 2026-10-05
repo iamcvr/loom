@@ -274,8 +274,11 @@ at all. `aur/stable-diffusion.cpp-vulkan-git` is actively maintained and most-vo
 and the Vulkan backend is **already proven on this hardware** (see MEASUREMENTS.md:
 RADV STRIX_HALO, within 7% of ROCm for LLM inference). Note the ROCm variant,
 `-hipblas-git`, is orphaned and a year out of date — Vulkan is the live path. Far
-narrower features though: identity preservation would mean PhotoMaker rather than
-IP-Adapter, and **whether it supports either needs checking before committing.**
+~~narrower features though: identity preservation would mean PhotoMaker rather than
+IP-Adapter.~~ **Checked 2026-10-05 and this was wrong:** `sd-server --help` lists
+`--ip-adapter` (with `--clip_vision`) and `--control-net`. The feature gap that made
+this choice feel risky is largely not there, so needing a real face embedding later
+would not force a move to ComfyUI.
 
 Cheapest next step is to verify the backends rather than argue: does PyTorch-ROCm
 see gfx1151 at all, and can stable-diffusion.cpp-vulkan hold a face across a dozen
@@ -314,9 +317,10 @@ chosen face rather than re-rolled from the same words.
 
 For anime that anchor may be nothing more than *the seed and tag block that produced
 the chosen option*, reused for every expression — no reference image mechanism at
-all. If it turns out a stronger anchor is needed, ComfyUI has IP-Adapter (requiring
-the workflow to stop being one hardcoded graph, already a listed known gap) and
-stable-diffusion.cpp has PhotoMaker or img2img against the chosen image.
+all. If it turns out a stronger anchor is needed, **both backends have IP-Adapter** —
+ComfyUI's requires the workflow to stop being one hardcoded graph (already a listed
+known gap), and stable-diffusion.cpp exposes `--ip-adapter` with `--clip_vision`, plus
+img2img against the chosen image.
 
 **Prove this first, with one character, before any selection UI exists.** It is a
 ten-minute experiment on the existing checkpoint: fix a seed, fix a tag block, fix
