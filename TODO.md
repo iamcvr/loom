@@ -281,34 +281,48 @@ Cheapest next step is to verify the backends rather than argue: does PyTorch-ROC
 see gfx1151 at all, and can stable-diffusion.cpp-vulkan hold a face across a dozen
 renders. Both are small experiments and they decide the whole feature's shape.
 
-### The blocker: character identity, not image count
+### Character identity — probably easier than it looks, because anime
 
-The ComfyUI workflow is a hardcoded six-node graph — checkpoint, two text encodes,
-empty latent, sampler, decode, save. No LoRA, no IP-Adapter, no reference image.
+28 expressions at 20-40s is 9-19 minutes a character, an hour for a party of four.
+That cost is acceptable and is the point. The risk is whether the 28 images read as
+the same person.
 
-28 expressions at 20-40s is 9-19 minutes a character, and an hour for a party of
-four. That cost is acceptable and is the point. **The risk is that the 28 images do
-not look like the same person.** Fixed seed plus a varied expression phrase drifts
-on hair, face shape and clothing, and a cast whose faces change between lines sells
-the opposite of "lived in".
+**For anime it probably does, and that changes the architecture.** Photoreal
+identity lives in subtle bone structure and skin texture, which is why preserving
+it needs a face embedding. An anime character *is* a short list of discrete,
+nameable, promptable attributes — hair colour and style, eye colour, accessories,
+outfit. Fixed seed plus those tags plus a varied expression tag is how SillyTavern
+sprite packs are generated in practice, and the checkpoint here is already anime
+(`waiIllustrious`), with stories styled to match.
+
+So the likely answer is the cheap one: a consistent character tag block, a fixed
+seed, a fixed head-and-shoulders framing, and only the expression term varying.
+
+What still drifts and wants watching: outfit and accessory detail, art-style wobble
+between seeds, and framing or head angle. A fixed framing in the prompt constrains
+most of it.
+
+**This makes the backend choice much easier.** If no face embedding is needed, then
+stable-diffusion.cpp's narrower feature set stops being a drawback — and the
+single-binary, no-Python, Vulkan-already-proven option wins on the thing that
+actually matters for shipping. Verify before committing, but expect this.
 
 The fix matches the flow already described, and is backend-independent: the player
 picks one option, and **that image becomes the identity anchor** — fed back as a
 reference when rendering the expression set, so the expressions are derived from the
 chosen face rather than re-rolled from the same words.
 
-*How* that reference is applied is where the backend choice bites. On ComfyUI it is
-IP-Adapter, which means the workflow must stop being one hardcoded graph — already a
-listed known gap in the README. On stable-diffusion.cpp it would be PhotoMaker or
-img2img against the chosen image, and whether either holds a face well enough is
-unverified.
+For anime that anchor may be nothing more than *the seed and tag block that produced
+the chosen option*, reused for every expression — no reference image mechanism at
+all. If it turns out a stronger anchor is needed, ComfyUI has IP-Adapter (requiring
+the workflow to stop being one hardcoded graph, already a listed known gap) and
+stable-diffusion.cpp has PhotoMaker or img2img against the chosen image.
 
-**This is the critical path for the whole feature.** Prove one character's
-expression set holds its identity before building any selection UI on top of it. If
-no available backend can hold a face across a dozen renders, the feature needs a
-different shape — perhaps far fewer expressions, or inpainting only the face region
-of one fixed base image — and it is much cheaper to learn that now than after the
-setup flow is built.
+**Prove this first, with one character, before any selection UI exists.** It is a
+ten-minute experiment on the existing checkpoint: fix a seed, fix a tag block, fix
+the framing, vary only the expression, and look at twelve of them. The answer
+decides the backend, the packaging and the shape of the setup flow, and it is far
+cheaper to learn now than afterwards.
 
 ### The flow
 
