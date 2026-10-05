@@ -304,3 +304,42 @@ strictly better than editing the table by hand.
 The allocation report carries the *effective* ceiling, and the settings panel says
 when the written numbers are being stretched — otherwise the layers table and the
 context panel disagree with each other and both look wrong.
+
+## Image generation on gfx1151 — stable-diffusion.cpp, Vulkan (2026-10-05)
+
+`stable-diffusion.cpp-vulkan-git r929`, `waiIllustriousSDXL_v170.safetensors`
+(6,938,040,682 bytes, 2,515 tensors, SDXL), Strix Halo iGPU, RADV.
+
+One 1024x1024 render, 28 steps, euler_a, cfg 5.0, clip-skip 2:
+
+| stage | time |
+|---|---|
+| model load (warm page cache) | 0.8 s |
+| sampling, 28 steps | 98.6 s — **3.5 s/iteration** |
+| VAE decode | 6.2 s |
+| **total** | **105.7 s** |
+
+**This is 2.6-5x slower than the figure the v1.2 roadmap was written against**, which
+was 20-40 s on an RTX 4070. The consequence is arithmetic: a 28-expression set is
+**49 minutes per character** and a party of four is **3.3 hours**, where the roadmap
+assumed 9-19 minutes and an hour and called that acceptable. It needs optimisation
+before the expression set is viable, not after.
+
+Untested levers, in rough order of expected value on this hardware:
+
+- **A quantised GGUF checkpoint.** Strix Halo is bandwidth-starved — shared LPDDR5X,
+  no dedicated VRAM — and SDXL sampling at f16 is memory-bound. `calcuis/illustrious`
+  publishes q4_k_m at 1.5 GB against this checkpoint's 6.9 GB, roughly 4x less weight
+  traffic per step. Largest expected win, and it is the same ggml lineage.
+- **Fewer steps.** 28 -> 20 is a 29% cut and Illustrious is usable at 20-24.
+- **Lower resolution.** Head-and-shoulders sprites do not need 1024x1024.
+- **`--diffusion-fa`** (flash attention in the diffusion model only), unmeasured.
+
+One warning appears during VAE decode and is survivable — the image decodes
+correctly:
+
+    ggml_vulkan: Failed to allocate pinned memory
+    (Requested buffer size exceeds device buffer size limit: ErrorOutOfDeviceMemory)
+
+That is the known Strix Halo Vulkan buffer-size ceiling. It costs a fallback path
+rather than a failure, and may be worth tuning.
