@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
+import advisor
 import assemble
 import brain
 import chapters as chapters_mod
@@ -628,6 +629,12 @@ class Handler(BaseHTTPRequestHandler):
                                              manual=True, replace=bool(body.get("replace")))
                 self._json({"queued": ok, "images": images.status()})
 
+            elif path == "/api/advise":
+                # Proposes only. Applying is POST /api/settings, which the reader
+                # reaches by pressing a button on a diff they have read.
+                self._json(advisor.propose(
+                    str(body.get("request") or ""),
+                    int(body.get("session") or 0) or None))
             elif path == "/api/settings":
                 out = settings.update(body.get("changes") or {})
                 # Model names are advisory-checked, not gated — see check_models.

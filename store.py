@@ -684,6 +684,20 @@ def record_timing(msg_id: int, ttft_ms: int, gen_ms: int) -> None:
                   (max(0, int(ttft_ms)), max(0, int(gen_ms)), msg_id))
 
 
+def recent_assistant_shape(session_id: int, limit: int = 10) -> list[dict]:
+    """Length of recent replies, and whether each hit the provider's limit.
+
+    `truncated` already exists for the resume button. Read together with length it
+    answers whether PROSE.max_tokens is doing anything at all.
+    """
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT length(content) AS chars, truncated FROM messages "
+            "WHERE session_id=? AND role='assistant' "
+            "ORDER BY id DESC LIMIT ?", (session_id, limit)).fetchall()
+    return [{"chars": int(r["chars"]), "truncated": bool(r["truncated"])} for r in rows]
+
+
 def timing_stats(session_id: int, limit: int = 50) -> Optional[dict]:
     """Last turn, median of 10, mean of 50 — in milliseconds.
 
