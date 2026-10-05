@@ -247,3 +247,31 @@ Two fixes, because one was not enough:
 Incidental trap found while diagnosing: `ledger.ts` is declared `TEXT`, so
 `WHERE ts < ?` against a float silently matches nothing. It returns zero rows and
 looks like an answer. Cast both sides.
+
+### Layer ceilings are measurements. Do not re-derive them from reasoning.
+
+The ceilings in `BUDGET_LAYERS` were sized from real stories, and the comments say
+so — *"2,000 was a guess and it was wrong: a real player wrote a 2,500-character
+power and the whole block was dropped from every single turn."*
+
+On 2026-10-05 the table was reorganised by tier, which was the right framing, and
+the numbers were re-derived from that framing, which was not. `rules` went
+11,000 -> 8,000 and `keyword_notes` 12,000 -> 4,000 on tidiness grounds.
+
+Seiran wants 10,012 for `rules` and 7,819 for `keyword_notes` on an ordinary turn.
+So every single turn silently dropped the world details, the opening scene and
+three lore entries — and the symptom was **prose that read as unimaginative**, not
+an error. The model had the tone instructions and nothing specific to be vivid
+about.
+
+`rules` is the trap because it is not just the rules: it carries the story rules
+AND the world details AND the opening scene in one layer.
+
+Two lessons:
+
+1. The arbiter already reports this. `packet["advice"]` said *"Dropping content
+   from: rules, keyword_notes. This is a ceiling, not a squeeze... It will be cut
+   on every turn until you do."* Nobody read it, because the symptom looked like a
+   model problem. **Check the allocation before blaming the model.**
+2. A ceiling that was derived from content is data. Reorganising a table is not a
+   licence to re-guess its values.

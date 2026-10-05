@@ -71,12 +71,17 @@ BUDGET_LAYERS = [
     # ---- per-turn direction: tiny, and volatile by nature
     ("director_notes",  0,      2_000),
     # ---- CONCRETE
-    ("rules",           1_500,  8_000),   # the world, the concept, the cast
+    # 11,000 is not a round number, it is a measured one: this layer carries the
+    # story rules AND the world details AND the opening scene, and Seiran alone
+    # wants 10,012. Lowered to 8,000 once on tidiness grounds, which silently
+    # dropped the world details and the opening from every single turn and read
+    # as the model being unimaginative. Do not trim this to make a table balance.
+    ("rules",           1_500,  11_000),  # rules + world details + opening scene
     # ---- INTERMEDIATE (high priority: it outranks the transcript that displaces it)
     ("ledger",          500,    6_000),   # facts you approved; see ledger.py
     # 2,000 was a guess and it was wrong: a real player wrote a 2,500-character
     # power and the whole block was dropped from every single turn.
-    ("protagonist",     800,    3_000),   # CONCRETE: who the player chose to be
+    ("protagonist",     800,    4_500),   # CONCRETE: who the player chose to be
     ("arc",             400,    1_500),   # CONCRETE: the current act's shape
     # The hinge between the tiers. As the transcript scrolls off, this is what
     # catches it — so it has to be able to hold a campaign, not a scene. 4,000
@@ -88,7 +93,10 @@ BUDGET_LAYERS = [
     ("state",           400,    4_000),   # relationships + stats, structured
     ("goals",           0,      1_500),
     ("long_memory",     500,    5_000),   # embedding-retrieved durable facts
-    ("keyword_notes",   0,      4_000),   # story lore + the session lorebook
+    # Lore fires in bursts: a scene touching four keywords pulls four entries at
+    # once. Seiran wants 7,819 on an ordinary turn, so 4,000 cut three entries
+    # every time. Generous on purpose — unfired entries cost nothing.
+    ("keyword_notes",   0,      12_000),  # story lore + the session lorebook
     ("temp_memory",     0,      2_500),   # heat-sorted recent salience
     # ---- TRANSCRIPT: the slack absorber. Its ceiling is deliberately larger than
     # any sane budget so that spare space becomes verbatim story rather than going
