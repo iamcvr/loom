@@ -249,7 +249,12 @@ def create_session(story_id: str, intro_id: str, title: str = "") -> int:
             " VALUES(?,?,?,0,?,?)",
             (story_id, intro_id, title, now, now),
         )
-        return int(cur.lastrowid)
+        sid = int(cur.lastrowid)
+        # SQLite reuses a freed id, so a new session can land on one whose child
+        # rows outlived it. Clearing them here makes that harmless even if a
+        # cascade is ever incomplete again or a delete dies half-way.
+        purge_session_rows(c, sid)
+        return sid
 
 
 def get_session(session_id: int) -> Optional[dict]:
@@ -295,12 +300,64 @@ def current_turn(session_id: int) -> int:
     return int(s["turn"]) if s else 0
 
 
-def delete_session(session_id: int) -> None:
+_session_tables_cache: list[str] = []
+
+
+def _session_tables(c: sqlite3.Connection) -> list[str]:
+    """Every table owning rows per session, read from the schema.
+
+    Derived, not listed. A hand-written list drifted: `ledger` and `ledger_state`
+    were added later and never joined the delete cascade, so deleting a session
+    left its approved facts behind. SQLite then hands the freed id to the next
+    session — rowids are max+1, not a counter — and a brand-new story opened
+    carrying a deleted one's ledger. Reading the schema means a new table is
+    covered the day it is created.
+    """
+    global _session_tables_cache
+    if not _session_tables_cache:
+        names = [r["name"] for r in c.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name<>'sessions'")]
+        _session_tables_cache = [
+            n for n in names
+            if any(col["name"] == "session_id"
+                   for col in c.execute(f"PRAGMA table_info({n})"))
+        ]
+    return _session_tables_cache
+
+
+def purge_session_rows(c: sqlite3.Connection, session_id: int) -> int:
+    """Remove every child row for one session id. Returns rows removed."""
+    n = 0
+    for t in _session_tables(c):
+        n += c.execute(f"DELETE FROM {t} WHERE session_id=?", (session_id,)).rowcount
+    return n
+
+
+def purge_orphans() -> dict[str, int]:
+    """Drop child rows whose session no longer exists.
+
+    Self-healing for databases that predate the derived cascade, and a backstop
+    against a delete that died half-way. Cheap: one indexed scan a table.
+    """
+    out: dict[str, int] = {}
     with _conn() as c:
-        for t in ("messages", "memories", "relationships", "goals", "stats", "notes",
-                  "media", "chapters", "threads", "synopsis", "lorebook",
-                  "protagonist"):
-            c.execute(f"DELETE FROM {t} WHERE session_id=?", (session_id,))
+        for t in _session_tables(c):
+            n = c.execute(
+                f"DELETE FROM {t} WHERE session_id NOT IN (SELECT id FROM sessions)"
+            ).rowcount
+            if n:
+                out[t] = n
+    return out
+
+
+def delete_session(session_id: int) -> None:
+    """Delete a session and everything belonging to it.
+
+    Everything, deliberately: if somebody deletes a session they want it gone,
+    not partially gone with its facts waiting to resurface under a new story.
+    """
+    with _conn() as c:
+        purge_session_rows(c, session_id)
         c.execute("DELETE FROM sessions WHERE id=?", (session_id,))
 
 

@@ -221,3 +221,29 @@ ceiling, a chapter can produce more transcript than the allowance holds, so the
 safety valve fires for the back half of each chapter and the prefix slides after
 all. Either compaction should trigger on fill — as `LEDGER_TRIGGER_FILL = 0.85`
 already does for the ledger — or the two numbers should be derived from each other.
+
+### SQLite reuses freed row ids, so orphaned child rows are not inert
+
+`INTEGER PRIMARY KEY` is `max(rowid) + 1`, not a counter. Delete the
+highest-numbered sessions and the next session created **takes one of their ids** —
+and inherits any child rows that outlived them.
+
+Observed 2026-10-05: a brand-new story, created minutes earlier at turn 0, opened
+carrying twelve ledger facts from a different story entirely, written eighteen days
+before the session existed. The cause was a hand-written delete cascade that listed
+twelve tables while fourteen carried a `session_id`; `ledger` and `ledger_state`
+were added later and never joined it.
+
+Two fixes, because one was not enough:
+
+- the cascade is now **derived from the schema** (`_session_tables()` scans for a
+  `session_id` column), so a table added tomorrow is covered the day it is created
+  rather than whenever somebody remembers
+- `create_session()` clears child rows for the id it was just handed, which makes
+  id reuse harmless even if a cascade is incomplete again or a delete dies half-way
+- `purge_orphans()` runs at startup and reports what it removed, so existing
+  databases self-heal
+
+Incidental trap found while diagnosing: `ledger.ts` is declared `TEXT`, so
+`WHERE ts < ?` against a float silently matches nothing. It returns zero rows and
+looks like an answer. Cast both sides.

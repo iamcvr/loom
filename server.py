@@ -843,6 +843,12 @@ def serve() -> None:
     config.MEDIA_DIR.mkdir(parents=True, exist_ok=True)
     for problem in settings.apply_saved():
         print(f"  settings: {problem}")
+    # Child rows whose session is gone. SQLite reuses a freed session id, so an
+    # orphan is not inert — it gets adopted by the next story created.
+    orphans = store.purge_orphans()
+    if orphans:
+        print("  purged orphaned rows: "
+              + ", ".join(f"{n} {t}" for t, n in sorted(orphans.items())))
     images.start()
     srv = Server((config.HOST, config.PORT), Handler)
     print(f"loom on http://{config.HOST}:{config.PORT}")
