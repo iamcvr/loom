@@ -35,6 +35,7 @@ import config
 import images
 import ledger as ledger_mod
 import memory
+import rulebuilder
 import settings
 import store
 import story as story_mod
@@ -416,6 +417,9 @@ class Handler(BaseHTTPRequestHandler):
                             "comfy": images.reachable()})
             elif path == "/api/stories":
                 self._json(story_mod.available())
+            elif path == "/api/rulebuilder":
+                # Static: the questionnaire never varies per story or session.
+                self._json({"axes": rulebuilder.schema()})
             elif path == "/api/settings":
                 self._json(settings.current())
             elif path.startswith("/api/chapters/"):
@@ -629,6 +633,12 @@ class Handler(BaseHTTPRequestHandler):
                                              manual=True, replace=bool(body.get("replace")))
                 self._json({"queued": ok, "images": images.status()})
 
+            elif path == "/api/rulebuilder":
+                # Generated server-side rather than in the browser, although the
+                # browser already has every fragment. build() enforces the one
+                # constraint that is not a matter of taste, and a second copy of
+                # that rule in JavaScript is a second copy to drift.
+                self._json({"text": rulebuilder.build(body.get("choices") or {})})
             elif path == "/api/advise":
                 # Proposes only. Applying is POST /api/settings, which the reader
                 # reaches by pressing a button on a diff they have read.

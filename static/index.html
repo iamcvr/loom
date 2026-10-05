@@ -218,6 +218,28 @@
   </footer>
 </dialog>
 
+<dialog id="rulesDlg" class="dlg rulesDlg">
+  <header>
+    <strong>Build the rules</strong>
+    <div class="grow"></div>
+    <span id="rulesCount" class="muted small"></span>
+    <button id="rulesCancel" class="ghost">Cancel</button>
+  </header>
+  <div class="rulesBody">
+    <div id="rulesQs" class="rulesQs"></div>
+    <div class="rulesPrev">
+      <h4>What this writes</h4>
+      <pre id="rulesPreview"></pre>
+    </div>
+  </div>
+  <footer>
+    <span class="muted small">Editable afterwards — this fills the Rules box, it does not lock it.</span>
+    <div class="grow"></div>
+    <button id="rulesAppend" class="ghost">Append</button>
+    <button id="rulesReplace" class="primary">Replace rules</button>
+  </footer>
+</dialog>
+
 <dialog id="castDlg" class="dlg castDlg">
   <header>
     <strong>Cast</strong>

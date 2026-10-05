@@ -1549,6 +1549,73 @@ function renderAdvice(d) {
   }
 }
 
+/* ----------------------------------------------------------- rule builder */
+
+/* Twelve questions that add up to a story's rules. The generated prose lands in the
+   Rules box where the author can read it, learn from it and change it -- never a
+   hidden config behind the answers. Someone who dislikes how their story reads has
+   to be able to find the sentence responsible. */
+
+const RB = { axes: null, choices: {}, target: null, timer: null, preview: '' };
+
+async function openRuleBuilder(d) {
+  RB.target = d;
+  RB.choices = {};
+  if (!RB.axes) RB.axes = (await api('/api/rulebuilder')).axes;
+
+  const qs = $('rulesQs');
+  qs.innerHTML = '';
+  RB.axes.forEach((a, i) => {
+    const box = el('div', 'rbAxis');
+    box.append(el('div', 'rbQ', (i + 1) + '. ' + a.question));
+    box.append(el('div', 'rbHelp small', a.help));
+    const opts = el('div', 'rbOpts');
+    a.options.forEach((o) => {
+      const b = el('button', 'ghost rbOpt', o.label);
+      b.title = o.text;
+      b.onclick = () => {
+        // Clicking the chosen option again clears it. An unanswered axis emits
+        // nothing, which leaves the model its own judgement -- better than a
+        // default nobody picked and nobody can account for.
+        if (RB.choices[a.key] === o.value) delete RB.choices[a.key];
+        else RB.choices[a.key] = o.value;
+        opts.querySelectorAll('.rbOpt').forEach((x, j) =>
+          x.classList.toggle('on', a.options[j].value === RB.choices[a.key]));
+        refreshRulePreview();
+      };
+      opts.append(b);
+    });
+    box.append(opts);
+    qs.append(box);
+  });
+  refreshRulePreview();
+  $('rulesDlg').showModal();
+}
+
+function refreshRulePreview() {
+  clearTimeout(RB.timer);
+  RB.timer = setTimeout(async () => {
+    const { text } = await api('/api/rulebuilder', { choices: RB.choices });
+    RB.preview = text || '';
+    $('rulesPreview').textContent = RB.preview || 'Answer a question to see what it writes.';
+    const n = Object.keys(RB.choices).length;
+    $('rulesCount').textContent =
+      n + ' of ' + RB.axes.length + ' answered \u00b7 ' + RB.preview.length + ' chars';
+    $('rulesReplace').disabled = !RB.preview;
+    $('rulesAppend').disabled = !RB.preview;
+  }, 120);
+}
+
+function applyRules(mode) {
+  const d = RB.target;
+  if (!d || !RB.preview) return;
+  const cur = (d.rules || '').trim();
+  d.rules = (mode === 'append' && cur) ? cur + '\n\n' + RB.preview : RB.preview;
+  $('rulesDlg').close();
+  touch();
+  renderEditor();            // the Rules textarea re-reads d.rules
+}
+
 function stageKnob(key, value) {
   const k = SET.data.knobs.find((x) => x.key === key);
   if (sameValue(value, k.value)) delete SET.pending[key];
@@ -2199,6 +2266,14 @@ function secStory(d) {
           'director\'s note — this is the one block that is never trimmed away.',
   }));
 
+  const rbBtn = el('button', 'ghost', 'Build the rules\u2026');
+  rbBtn.onclick = () => openRuleBuilder(d);
+  out.push(field('', rbBtn, {
+    hint: 'Twelve questions about tone, cast, action, romance, pacing and stakes. '
+        + 'Writes the answers into the box above as editable prose. What every '
+        + 'story shares lives in Settings instead, so this is only what is yours.',
+  }));
+
   out.push(field('World details', area(d, 'details', 10,
     'Setting, factions, geography, what is common knowledge.'), {
     count: true,
@@ -2666,6 +2741,9 @@ $('setBack').onclick = async () => {
 $('setSave').onclick = saveSettings;
 $('adviseGo').onclick = askAdvisor;
 $('adviseInput').onkeydown = (e) => { if (e.key === 'Enter') askAdvisor(); };
+$('rulesCancel').onclick = () => $('rulesDlg').close();
+$('rulesReplace').onclick = () => applyRules('replace');
+$('rulesAppend').onclick = () => applyRules('append');
 $('adviseBubble').onclick = openAdvisor;
 $('adviseClose').onclick = closeAdvisor;
 $('adviseSmaller').onclick = () => setAdviseFont(adviseFontNow() - ADVISE_FONT.step);

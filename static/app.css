@@ -688,6 +688,27 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
 /* The settings advisor. Proposals only — applying goes through the same pending
    queue as a hand edit, so a proposed knob highlights as changed and the ordinary
    Save button commits it. */
+/* The rule builder. Questions on the left, the prose they write on the right --
+   the preview is the point, because the author is meant to read what they are
+   choosing rather than trust a label. */
+.rulesDlg { width: min(1100px, 94vw); max-height: 88vh; }
+.rulesBody { display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+  padding: 12px 14px; overflow: hidden; min-height: 0; }
+.rulesQs { overflow-y: auto; padding-right: 6px; }
+.rulesPrev { display: flex; flex-direction: column; min-height: 0;
+  background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); }
+.rulesPrev h4 { margin: 0; padding: 9px 12px; font-size: .78rem; letter-spacing: .05em;
+  text-transform: uppercase; opacity: .55; border-bottom: 1px solid var(--line); }
+.rulesPrev pre { margin: 0; padding: 12px; overflow-y: auto; white-space: pre-wrap;
+  font: inherit; font-size: 13px; line-height: 1.5; opacity: .9; }
+.rbAxis { margin-bottom: 16px; }
+.rbQ { font-weight: 600; margin-bottom: 2px; }
+.rbHelp { opacity: .55; margin-bottom: 7px; }
+.rbOpts { display: flex; flex-wrap: wrap; gap: 6px; }
+.rbOpt { font-size: 13px; padding: 5px 10px; text-align: left; }
+.rbOpt.on { border-color: var(--accent); color: var(--fg); background: var(--bg3); }
+@media (max-width: 860px) { .rulesBody { grid-template-columns: 1fr; } }
+
 .advisor { position: fixed; left: 14px; bottom: 14px; z-index: 60; }
 .advisor.collapsed .advisePanel { display: none; }
 .advisor:not(.collapsed) .adviseBubble { display: none; }
