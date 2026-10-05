@@ -354,3 +354,127 @@ developed further. Hiding the option does not break existing stories — the fie
 still parses, so goblin-road, laundry-and-taxes and reverse-isekai (`raw`) and
 kindling (`narrative`) keep working. They simply stop being creatable, and the
 sprite work has one mode to target instead of three.
+
+## v1.3 — the memory system is overbuilt
+
+Two observations from OOC.ai, the thing loom is a local replacement for. Both are
+simplifications, and the second one is uncomfortable.
+
+### Observation 1: state belongs in the transcript, not in a pipeline
+
+OOC.ai ends every reply with a structured block — identity, date, time, location,
+inventory, money, one line per character with mood and whereabouts, and a one-line
+recap of the beat. Four mechanisms are doing work there, and only the first is
+obvious:
+
+1. **It rides in context for free.** It is part of an assistant message the
+   transcript already pays for. loom's `state` layer competes for budget as its own
+   line item.
+2. **It is immutable, so it is cache-safe.** Once written, that text never changes;
+   it is frozen in a historical message. loom's `state`, `goals` and `ledger` sit at
+   DEPTH and are recomputed and re-rendered every turn, invalidating the prompt
+   tail. The footer is append-only, which is what prefix caching wants.
+3. **The model authors it, so it cannot disagree with the prose.** loom runs a
+   separate utility call to parse narrative into fields — a lossy translation that
+   can drift from what the story actually said. The footer is written in the same
+   breath as the prose, by the same model.
+4. **It self-corrects by induction.** Each turn the model reads the previous block
+   and writes the next, so persistence becomes "copy forward and amend" — a task
+   models are reliably good at, unlike re-extraction from scratch.
+
+**The synthesis, better than either approach:** have the model emit the footer, then
+**parse it into SQLite** rather than extracting from prose. That inverts the fragile
+step — instead of asking a utility model to read prose and guess the state, ask the
+prose model to emit a rigid format that parses deterministically. Same rows, one
+fewer model call per turn, no drift, the UI panels keep working, and state becomes
+append-only transcript instead of a recomputed depth layer. A parse failure degrades
+gracefully: that turn's row does not update, but the block is still in context doing
+its primary job.
+
+Costs, not fatal but real: every reply pays 150-250 tokens of footer forever, and
+measured replies already stop naturally around 2,200 characters, so it competes with
+prose. And Seiran's rules say "clean prose — never asterisks around actions"; a rigid
+block is structure imposed on prose explicitly told to be unstructured. Same tension
+as the per-line sprite format in v1.2, and it must be reconciled deliberately rather
+than letting the format quietly win.
+
+### Observation 2: long-term memory is just a lorebook
+
+The first read of OOC.ai was "4 long-term, 4 temporary, a relationships blurb, one
+goal — far simpler". That was wrong and the correction matters: **one story has 91
+long-term memories.** It is doing heavy summarization. The difference is not that it
+skips the work, it is that the work produces a flatter result.
+
+What it actually appears to be:
+
+- story content authored at creation, in the prompt
+- cast and keywords for static recall when relevant
+- **long-term memories: an unbounded, auto-written lorebook**, entries created at its
+  own chapter boundaries
+- **short-term: a fixed small window**, around four threads, that may or may not be
+  pulled on
+- relationship status
+- **one** core goal the narrative steers toward
+
+The structural point: **that is one mechanism where loom has four.** A growing
+lorebook with mixed authorship — some entries written by the player, some written
+automatically at chapter closes — retrieved through a single path. loom has
+`keyword_notes` (static lorebook), `long_memory` (embedded retrieval), `chapters`
+(compaction) and `temp_memory` (heat and decay) as four subsystems, with four budget
+lines and four code paths, for arguably one thing.
+
+And a fixed cap of four short-term threads means **no heat-and-decay arithmetic is
+needed at all.** Decay exists to rank a large pool. Ranking four items is just
+recency.
+
+### Why theirs is fast, honestly
+
+Not architecture cleverness — **prompt size.** A few thousand tokens of lorebook
+hits plus four threads plus a goal, against the roughly 30,000 characters loom
+assembles for Seiran. Fixed caps also make the total bounded and predictable, where
+loom's layers are unbounded and must be arbitrated.
+
+Which leads somewhere uncomfortable: **the context-budget arbiter exists to solve a
+problem created by having many unbounded competing layers.** Fixed small caps avoid
+the problem rather than solving it.
+
+### What earns its keep anyway
+
+The arbiter is still right **for loom specifically**, and for a reason that does not
+apply to OOC.ai: loom ships to whatever single machine someone has, with budgets
+from 8k to 96k, where OOC.ai tunes for one known deployment it controls. Fixed caps
+cannot spend a large context window well, and cannot shrink to fit a small one. The
+arbiter is solving a harder problem, not an imaginary one.
+
+Also keep:
+
+- **the dropped/`advice` reporting**, which caught a real bug — Seiran silently
+  losing world details and lore on every turn, invisible until the panel said so
+- **DEPTH ordering**, which keeps the volatile layers behind the stable ones so the
+  system block stays byte-identical across turns (verified: it does)
+- **the chapter-anchored transcript floor**
+
+### Shared infrastructure with v1.2
+
+The footer and v1.2's per-line speaker attribution need the identical missing piece:
+**a shipped global format directive**, a layer every story inherits rather than each
+story restating. Build it once and the memory simplification comes nearly free.
+
+### Proposed, not decided
+
+1. Collapse `keyword_notes` + `long_memory` + `chapters` into one lorebook with
+   mixed authorship and a single retrieval path.
+2. Replace `temp_memory` heat/decay with a fixed window of N recent threads.
+3. Replace `state` + `goals` extraction with the parsed footer.
+4. Keep the arbiter and the dropped reporting.
+5. Measure prompt size and ttft before and after, on the same story and seed.
+
+### Open questions, measurable before committing
+
+- **How many of those 91 entries enter the prompt per turn?** If retrieval pulls
+  most of them, the prompt is not small and the speed explanation is wrong. This is
+  the single number that decides whether observation 2 holds.
+- Does a fixed window of four actually suffice, or is loom's heat ranking doing
+  something a reader would miss?
+- Changing memory architecture against existing stories risks regressions that only
+  show up in prose quality, which is the hardest thing here to measure.
