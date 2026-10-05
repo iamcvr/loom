@@ -835,8 +835,23 @@ input[type=number]::-webkit-outer-spin-button {
   .chapBody, .loreBody, .castBody, .rulesBody { padding: 12px 14px; }
   .dlg pre { max-height: none; }
 
-  .rulesBody { grid-template-columns: 1fr; overflow-y: auto; }
-  .rulesPrev { max-height: 45vh; }
+  /* The dialog is a flex column at 100dvh, so exactly one child must be the
+     scroller -- `flex: 1` plus `min-height: 0`, or the body sizes to its content
+     and overflows the dialog instead of scrolling inside it. That overflow is
+     what made the page behind move: the touch never landed on a scrollable
+     element, so it chained to the document. */
+  .dlg > .rulesBody, .dlg > .chapBody, .dlg > .loreBody, .dlg > .castBody,
+  .dlg > .setBody {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;      /* stop the chain even at the ends */
+  }
+  .rulesBody { grid-template-columns: 1fr; }
+  /* Nested scrollers fight the one above on touch. On a phone the questions and
+     the preview are simply stacked and the body scrolls past both. */
+  .rulesQs { overflow: visible; padding-right: 0; }
+  .rulesPrev { max-height: none; }
+  .rulesPrev pre { overflow-y: visible; }
   .rbOpt { flex: 1 1 auto; }
 
   /* The cast list and detail stack rather than share 390px. */
@@ -858,3 +873,7 @@ input[type=number]::-webkit-outer-spin-button {
   .dlg > footer button { flex: 1 1 100%; }
   .bar .ghost { padding: 7px 9px; }
 }
+
+/* Safari moves the document behind an open <dialog> even though the modal has
+   focus. Pinning the root while one is open is the only reliable stop. */
+html:has(dialog[open]) { overflow: hidden; }
