@@ -343,3 +343,45 @@ correctly:
 
 That is the known Strix Halo Vulkan buffer-size ceiling. It costs a fallback path
 rather than a failure, and may be worth tuning.
+
+### Making it fast enough — what actually worked (2026-10-05)
+
+Same character, same seed 42, same tag block, same negative prompt, 768x1024, euler_a,
+cfg 5.0, clip-skip 2. Only the stated variable changes each row.
+
+| config | per render | 28-expression set | quality |
+|---|---|---|---|
+| f16, 24 steps | 49 s | 23 min | baseline |
+| q4_K, 24 steps | 43 s | 20 min | equivalent |
+| q4_K + `--diffusion-fa`, 24 steps | **27 s** | **12.8 min** | equivalent |
+| q4_K + `--diffusion-fa`, 16 steps | **19.4 s** | **9.1 min** | equivalent |
+
+**The prediction above was wrong and the error is instructive.** A quantised GGUF was
+ranked the largest expected win, on the reasoning that Strix Halo is bandwidth-starved
+and SDXL sampling at f16 is memory-bound. Quantising the same checkpoint to q4_K cut
+weight traffic 2.5x (6.94 GB -> 2.80 GB) and bought **12%**. Weight bandwidth was not
+the constraint.
+
+`--diffusion-fa` then cut 37% on its own. Taken together these say the workload is
+**attention- and compute-bound, not weight-bandwidth-bound**, on an iGPU with no
+tensor cores. The levers that cut compute paid off; the lever that cut weight traffic
+did not. Step count is strictly linear and behaves exactly as arithmetic predicts.
+
+Net: **23 minutes to 9 for a 28-expression set**, 1.5 hours to 36 minutes for a party
+of four. This is no longer the blocker it was.
+
+Quality notes from the A/B sheets:
+
+- **q4_K is visually equivalent to f16.** Same linework, faces, colour and shading.
+  Images *diverge* — perturbed weights take a different denoising path, so the same
+  seed lands on a different valid sample — but neither is better. RMSE and PSNR
+  between them are therefore meaningless here; they measure divergence, not quality.
+  Only two small things favour f16: crisper small logo text, and no faint background
+  banding.
+- **16 steps shows no degradation** against 24 in faces, hands or linework.
+- **Unresolved:** one of three frames at 16 steps rendered its shirt trim navy instead
+  of red. That is the same sporadic outfit drift already documented, and a different
+  step count is a different draw — but whether *fewer steps raises the drift rate* is
+  not answerable from three frames. If a 28-set at 16 steps needs noticeably more
+  rerolls than at 24, that erases the saving. Worth measuring before 16 becomes the
+  shipped default; 20-24 steps is the conservative choice until then.
