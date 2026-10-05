@@ -707,7 +707,15 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
   font-size: .78rem; letter-spacing: .05em; text-transform: uppercase; opacity: .6; }
 /* The log is kept until the panel is closed or the page reloads — a proposal is
    worth re-reading after you have looked at the knob it names. */
-.adviseLog { max-height: min(26rem, 55vh); overflow-y: auto; }
+.adviseHeadBtns { display: flex; gap: 2px; }
+.adviseHeadBtns button { padding: 0 6px; line-height: 1.2; }
+/* Scaled by the +/- buttons. The site's .small is an absolute 12.5px, so the
+   children have to be re-expressed in em or they ignore the setting entirely. */
+.adviseLog { max-height: min(26rem, 55vh); overflow-y: auto;
+  font-size: var(--adviseFont, 12.5px); line-height: 1.45; }
+.adviseLog .small { font-size: 1em; line-height: inherit; }
+.adviseLog .adviseCard h4 { font-size: .88em; }
+.adviseLog .adviseAsk { font-size: .88em; }
 .adviseRow { display: flex; gap: 8px; }
 .adviseRow input { flex: 1; min-width: 0; padding: 8px 10px;
   background: var(--bg2); color: var(--fg);

@@ -1433,6 +1433,25 @@ const sameValue = (a, b) => JSON.stringify(a) === JSON.stringify(b);
    because a proposal is worth re-reading after you have gone and looked at the
    knob it names. Closing clears it; there is no persistence worth the confusion. */
 
+/* The response is dense and the default 12.5px is tight for it. Persisted the way
+   the scene panel persists its open state, because a text size that resets on
+   every reload is worse than no control at all. */
+const ADVISE_FONT_KEY = 'loom.adviseFont';
+const ADVISE_FONT = { min: 11, max: 22, step: 1.5, def: 12.5 };
+
+function adviseFontNow() {
+  const v = parseFloat(localStorage.getItem(ADVISE_FONT_KEY));
+  return Number.isFinite(v) ? v : ADVISE_FONT.def;
+}
+
+function setAdviseFont(px) {
+  const v = Math.min(ADVISE_FONT.max, Math.max(ADVISE_FONT.min, px));
+  $('adviseOut').style.setProperty('--adviseFont', v + 'px');
+  try { localStorage.setItem(ADVISE_FONT_KEY, String(v)); } catch (e) { /* private mode */ }
+  $('adviseSmaller').disabled = v <= ADVISE_FONT.min;
+  $('adviseBigger').disabled = v >= ADVISE_FONT.max;
+}
+
 function openAdvisor() {
   $('advisor').classList.remove('collapsed');
   $('adviseInput').focus();
@@ -2663,6 +2682,9 @@ $('adviseGo').onclick = askAdvisor;
 $('adviseInput').onkeydown = (e) => { if (e.key === 'Enter') askAdvisor(); };
 $('adviseBubble').onclick = openAdvisor;
 $('adviseClose').onclick = closeAdvisor;
+$('adviseSmaller').onclick = () => setAdviseFont(adviseFontNow() - ADVISE_FONT.step);
+$('adviseBigger').onclick = () => setAdviseFont(adviseFontNow() + ADVISE_FONT.step);
+setAdviseFont(adviseFontNow());
 $('edBack').onclick = async () => {
   if (ED.dirty && !await ask('Discard unsaved changes to this story?', 'Discard')) return;
   closeEditor();
