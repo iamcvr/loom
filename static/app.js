@@ -251,14 +251,14 @@ function openPC({ storyId = null, defaults = null } = {}) {
 
      Also shown when a session already HAS power data, so turning the concept off
      in a story file never hides something a player already wrote. */
-  const hasPower = !!(defaults.power_label || cur.power_label
+  const hasPower = !!(defaults?.power_label || cur.power_label
                       || cur.power_name || cur.power);
   if (hasPower) {
-    body.append(el('h4', null, (cur.power_label || defaults.power_label || 'Ability') + ' name'));
+    body.append(el('h4', null, (cur.power_label || defaults?.power_label || 'Ability') + ' name'));
     const powRow = el('div', 'pcRow');
     const label = el('input');
     label.type = 'text';
-    label.value = cur.power_label || defaults.power_label || '';
+    label.value = cur.power_label || defaults?.power_label || '';
     label.placeholder = 'Quirk';
     label.title = 'What this world calls a power';
     label.className = 'pcLabel';
