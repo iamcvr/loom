@@ -64,7 +64,7 @@ docker compose restart loom
 | a settings knob | nothing — edited live in the UI, persisted to `state/settings.json` | same |
 
 A first install has neither a prose nor a utility model configured — see
-[`TODO.md`](TODO.md) §1, which is the gap where a setup guide belongs.
+[`TODO.md`](TODO.md) §8, which is the gap where a setup guide belongs.
 
 ### Deployment facts
 

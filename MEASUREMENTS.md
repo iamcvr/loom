@@ -174,4 +174,4 @@ context window cannot drift apart, which also means loom **overrides** whatever
 `OLLAMA_CONTEXT_LENGTH` the server was started with.
 
 → Keep `num_ctx` above `(BUDGET_TOTAL / 3.15) + max_tokens`. On 2026-10-05 the
-live config sat 8 tokens inside that limit.
+live config sat 7 tokens inside that limit.

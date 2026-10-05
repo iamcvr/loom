@@ -26,6 +26,7 @@ not tuning, and the keys must not be shipped to a browser.
 from __future__ import annotations
 
 import json
+import math
 import threading
 from typing import Any, Optional
 
@@ -399,6 +400,8 @@ def apply_saved() -> list[str]:
                 _write(key, _coerce(knob, value))
             except ValueError as e:
                 problems.append(str(e))
+        if msg := _headroom_problem(context_headroom()):
+            problems.append(msg)
         return problems
 
 
@@ -437,6 +440,71 @@ def check_models() -> list[str]:
     return warnings
 
 
+def context_headroom(pending: Optional[dict] = None) -> dict:
+    """Does the character budget still fit the model's token window?
+
+    ollama does not error when a prompt exceeds the context it loaded the model
+    with — it drops the front, so the story reads as having lost its memory and
+    the model takes the blame. The budget is counted in characters and the window
+    in tokens, so the two drift apart silently. This is the arithmetic that ties
+    them together; see MEASUREMENTS.md.
+
+    `pending` overlays values that have been validated but not yet written, so a
+    save raising `num_ctx` and `BUDGET_TOTAL` together is judged on its result
+    rather than on a half-applied state.
+    """
+    pending = pending or {}
+
+    def val(key, current):
+        return pending.get(key, current)
+
+    provider = val("PROSE.provider", config.PROSE.get("provider"))
+    window = int(val("PROSE.num_ctx", config.PROSE.get("num_ctx") or 0))
+    budget = int(val("BUDGET_TOTAL", config.BUDGET_TOTAL))
+    reply = int(val("PROSE.max_tokens", config.PROSE.get("max_tokens") or 0))
+    prompt_tokens = math.ceil(budget / config.CHARS_PER_TOKEN)
+    needed = prompt_tokens + reply
+    return {
+        # num_ctx is only ever sent by the ollama provider. An openai_compat
+        # server owns its own window and does not volunteer what it is, so there
+        # is nothing to check against there — see TODO.md.
+        "applies": provider == "ollama" and window > 0,
+        "prompt_tokens": prompt_tokens,
+        "reply_tokens": reply,
+        "needed": needed,
+        "window": window,
+        "headroom": window - needed,
+        "fits": needed <= window,
+    }
+
+
+def _headroom_problem(h: dict) -> Optional[str]:
+    """The sentence to show when the budget and the window disagree, or None."""
+    if not h["applies"]:
+        return None
+    if not h["fits"]:
+        return (
+            f"context overflow: the prompt needs {h['needed']} tokens "
+            f"({h['prompt_tokens']} budget + {h['reply_tokens']} reply) but "
+            f"PROSE.num_ctx is {h['window']}. ollama would silently drop the front "
+            f"of every prompt, which reads as the story losing its memory. Raise "
+            f"num_ctx to at least {h['needed']}, or lower BUDGET_TOTAL to "
+            f"{int((h['window'] - h['reply_tokens']) * config.CHARS_PER_TOKEN)} "
+            f"characters."
+        )
+    # Exactly fitting is not safe: 3.15 chars/token is an average and
+    # dialogue-heavy turns run worse, so a thin margin truncates eventually and
+    # silently. Warned, never blocked — it is a real configuration.
+    if h["window"] and h["headroom"] / h["window"] < 0.10:
+        return (
+            f"thin context margin: only {h['headroom']} tokens spare against "
+            f"PROSE.num_ctx {h['window']}. The chars-per-token ratio is an "
+            f"average; a dialogue-heavy turn will cross it and truncate without "
+            f"an error. Raise num_ctx."
+        )
+    return None
+
+
 def update(changes: dict) -> dict:
     """Validate every change, then apply all of them or none.
 
@@ -459,6 +527,14 @@ def update(changes: dict) -> dict:
                 problems.append(str(e))
         if problems:
             raise ValueError("; ".join(problems))
+
+        # BUDGET_TOTAL, PROSE.max_tokens and PROSE.num_ctx are three knobs
+        # describing one constraint, so the whole change is judged together —
+        # raising the window and the budget in a single save is legal, raising
+        # only the budget past the window is not.
+        h = context_headroom(coerced)
+        if h["applies"] and not h["fits"]:
+            raise ValueError(_headroom_problem(h))
 
         for key, value in coerced.items():
             _write(key, value)
@@ -516,4 +592,5 @@ def current() -> dict:
         "path": str(_path()),
         "floors_total": total,
         "floors_fit": total <= config.BUDGET_TOTAL,
+        "context": context_headroom(),
     }

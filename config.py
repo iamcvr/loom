@@ -33,9 +33,14 @@ PORT = int(os.environ.get("LOOM_PORT", "8100"))
 # so and recommends a compact.
 #
 # Characters, not tokens — cheap to measure, and the ratio is stable enough for
-# budgeting. Roughly 3.6 chars/token on English prose.
+# budgeting.
 
 BUDGET_TOTAL = 48_000
+
+# What turns a character budget into a token count. MEASURED at 3.15 on a real
+# dialogue-heavy turn, not assumed: the 3.6 this used to claim ran ~14% light, so
+# every estimate derived from it understated what the prompt actually costs.
+CHARS_PER_TOKEN = 3.15
 
 # Order matters. This list IS the priority order.
 BUDGET_LAYERS = [
