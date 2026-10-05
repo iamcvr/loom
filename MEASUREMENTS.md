@@ -175,3 +175,49 @@ context window cannot drift apart, which also means loom **overrides** whatever
 
 → Keep `num_ctx` above `(BUDGET_TOTAL / 3.15) + max_tokens`. On 2026-10-05 the
 live config sat 7 tokens inside that limit.
+
+### Prefix caching is worth 113x, and one token destroys it
+
+Measured against ollama, 7,011-token prompt, Cydonia 24B Q6_K:
+
+| request | prompt tokens | prefill |
+|---|---|---|
+| cold prefix | 7,011 | **13.51 s** |
+| same prefix, different user message | 7,011 | **0.12 s** |
+| same prefix again | 7,011 | 0.11 s |
+| **one token changed at the very front** | 7,013 | **13.48 s** |
+| back to the original prefix | 7,011 | 0.11 s |
+
+Three things follow:
+
+1. **An unchanged prefix is effectively free** — 113x faster. No client flag is
+   needed; it is on by default.
+2. **A single changed token at the front costs the entire prefill back.** Position
+   is not a micro-optimisation: anything that changes *ahead* of the transcript
+   drags the whole transcript through reprocessing with it, every turn.
+3. The cache survives switching away and back, so it is not one slot.
+
+Note: ollama's `prompt_eval_count` reports how many prompt tokens there *were*,
+not how many were computed — it reads 7,011 on every row above. Only
+`prompt_eval_duration` reveals a cache hit. Measuring the count will tell you
+caching is broken when it is working perfectly.
+
+→ `config.DEPTH_LAYERS` moves the seven layers that change on most turns
+(`keyword_notes`, `long_memory`, `temp_memory`, `state`, `goals`, `nudge`, and
+`ledger` which was already there) *after* the transcript, leaving only
+never-changing content in the system block. Verified: a relationship upsert
+leaves the system block byte-identical while the change still reaches the model.
+
+### The transcript is already chapter-anchored — do not "fix" it
+
+`build()` takes the transcript from `store.chapter_transcript_floor(...)`, i.e.
+everything since the last closed chapter plus `CHAPTER_OVERLAP_MSGS`. So it grows
+by appending within a chapter and resets when one closes — it does **not** slide
+by two messages a turn. The `transcript[-kept:]` trim further down is a safety
+valve for a chapter that outgrows its allowance, not the normal path.
+
+Open question (see TODO): at `CHAPTER_EVERY_TURNS = 20` and a 1,200-token reply
+ceiling, a chapter can produce more transcript than the allowance holds, so the
+safety valve fires for the back half of each chapter and the prefix slides after
+all. Either compaction should trigger on fill — as `LEDGER_TRIGGER_FILL = 0.85`
+already does for the ledger — or the two numbers should be derived from each other.

@@ -264,6 +264,29 @@ IMG_MAX_CONCURRENT = 1      # one render at a time; the 4070 has 12GB
 
 RECENT_TURNS_DEFAULT = 30   # transcript window before the budget trims it
 
+# Which layers render at DEPTH — after the transcript — instead of in the system
+# block. Position, not priority: they are still budgeted at their place in
+# BUDGET_LAYERS.
+#
+# Measured on a warm prefix: a prompt whose prefix is unchanged prefills in 0.11s
+# where the cold prefix took 13.51s, and changing a single token at the front
+# costs the entire prefill back. Anything that changes ahead of the transcript
+# therefore drags the whole transcript through reprocessing with it, every turn.
+# These seven change on most turns — retrieval is re-queried, heat decays,
+# relationships are upserted, pacing is recomputed — so in the system block they
+# were invalidating tens of thousands of cached tokens to save nothing.
+#
+# The text and its headings are unchanged; only the position moves. Set to () to
+# put everything back in the system block and A/B the prose.
+DEPTH_LAYERS = (
+    "keyword_notes",
+    "long_memory",
+    "temp_memory",
+    "state",
+    "goals",
+    "nudge",
+)
+
 # Some APIs reject a conversation that does not end with a user message, and a
 # narrative-mode story has no player typing. It is also what the depth channel
 # attaches to — with no user turn, the director's note silently degrades into the

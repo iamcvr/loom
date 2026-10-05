@@ -30,34 +30,22 @@ seconds") and derive the character budget from a measured prefill/generation rat
 at startup. That is also a far better knob for a stranger on unknown hardware
 than a character count.
 
-### 4. Priority order is not cache order
+### 9. Compaction should trigger on fill, not only on turn count
 
-Backends reuse the KV cache on an **unchanged prefix**, and the three tiers have
-exactly the right shape for that — but the layer order does not reflect them:
+`CHAPTER_EVERY_TURNS = 20` with a 1,200-token reply ceiling can produce more
+transcript than the allowance holds, so the `transcript[-kept:]` safety valve
+fires for the back half of each chapter — and once it does, the prefix slides
+every turn and the §4 caching win is lost for those turns.
 
-```
-CONCRETE      never changes      -> should be FIRST  (cached every turn)
-INTERMEDIATE  changes on update  -> middle
-DIRECTION     changes every turn -> late
-TRANSCRIPT    appends every turn -> LAST
-```
+`LEDGER_TRIGGER_FILL = 0.85` already does exactly this for the ledger review, with
+the reasoning written down. Chapters want the same treatment, or the two numbers
+want deriving from one another the way the budget now derives from the window.
 
-Today `director_notes` is first and `nudge` sits mid-table, both of which change
-every turn — so they invalidate everything after them on every single turn, which
-is the worst possible position for the two most volatile layers.
+Measure first: how many turns a chapter actually runs before the valve fires.
 
-The tension is real, not an oversight: **the list is the priority order**, meaning
-it decides what survives trimming, and `ledger` deliberately outranks the
-transcript that would displace it. Reordering for the cache would reorder what
-gets dropped under pressure.
+---
 
-`ledger` already shows the way out — it is budgeted at its priority but *rendered*
-at DEPTH, i.e. at the end of the prompt. So priority and position can be separated
-per layer. The work is to do that deliberately for the volatile layers rather than
-once by accident.
-
-Measure first: the actual cache hit rate across consecutive turns. Nobody has
-looked, and caching is on by default in llama-server, so the baseline is unknown.
+---
 
 ## Anytime
 
@@ -115,7 +103,6 @@ loom currently fails at the first turn with a provider error, which is a poor
 first impression. A setup screen that lists what ollama actually holds would be
 better than any README section.
 
----
 
 ## Done
 
@@ -166,3 +153,26 @@ transcript ~5 exchanges -> ~26, `chapters` 4,000 -> 14,000, KV cache 5.00 GiB.
 Retired knobs are now migrated rather than reported as "unknown" — `RETIRED` in
 settings.py drops them from storage once with the reason, which matters for anyone
 upgrading across the frontier strip.
+
+### 4. ~~Priority order is not cache order~~ — 2026-10-05
+
+Measured first: an unchanged prefix prefills 113x faster, and one changed token at
+the front costs the whole prefill back (`MEASUREMENTS.md`). So position ahead of
+the transcript is expensive, not cosmetic.
+
+`config.DEPTH_LAYERS` now moves the seven layers that change on most turns after
+the transcript, leaving only never-changing content in the system block:
+
+    system block   rules, protagonist, chapters, arc        stable, cached
+    messages       transcript                               appends
+    depth          keyword_notes, long_memory, temp_memory,
+                   state, goals, nudge, ledger, pacing,
+                   director                                 small, recomputed
+
+Position only — the text and its headings are unchanged, and layers are still
+budgeted at their place in `BUDGET_LAYERS`. `_RENDER_ORDER` already existed to
+separate position from priority; this uses it rather than reordering priorities.
+Set `DEPTH_LAYERS = ()` to restore the old layout and A/B the prose.
+
+Verified: a relationship upsert leaves the system block byte-identical while the
+change still reaches the model at depth.

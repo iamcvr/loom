@@ -528,7 +528,8 @@ def build(
     from memory import action_demand
     director = text.get("director_notes", "")
     demand = action_demand(story, session_id, store.current_turn(session_id))
-    render = [n for n in _RENDER_ORDER if n != "director"]
+    render = [n for n in _RENDER_ORDER
+              if n != "director" and n not in config.DEPTH_LAYERS]
 
     parts: list[str] = []
     for name in render:
@@ -571,6 +572,22 @@ def build(
     # Facts first: they are context for everything after them, and they are the
     # part that changes between turns, so they sit at the front of the volatile
     # tail where llama.cpp reprocesses the least.
+    # Volatile reference layers, moved here from the system block by
+    # config.DEPTH_LAYERS. Position only — the text and its headings are
+    # unchanged, and they are still budgeted at their place in BUDGET_LAYERS.
+    #
+    # They sit ahead of the directives below because those are short, are the
+    # author speaking, and need to be the last thing before generation. Bulk
+    # reference first, instructions last.
+    for name in _RENDER_ORDER:
+        if name not in config.DEPTH_LAYERS:
+            continue
+        body = text.get(name, "")
+        if not body:
+            continue
+        title = _SECTION_TITLES.get(name)
+        depth.append(f"{title}\n\n{body}" if title else body)
+
     led = text.get("ledger", "")
     if led:
         depth.append("[Established facts - these are still true. Do not "

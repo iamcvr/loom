@@ -1734,17 +1734,41 @@ function layerTable(k, rows) {
   const wrap = el('div');
   wrap.append(t);
 
-  // Floors are the one constraint the arbiter cannot work around: if they sum
-  // past the total, every layer is squeezed on every turn. Say so here rather
-  // than waiting for the context panel to report it mid-scene.
-  const budget = knobValue(SET.data.knobs.find((x) => x.key === 'BUDGET_TOTAL'));
+  // The budget is DERIVED from the context window — there is no BUDGET_TOTAL knob
+  // any more — so show the derivation here, because this panel is where someone
+  // decides what the window should be. Reading it off a knob that no longer
+  // exists is what made this whole group fail to render.
+  const ctx = SET.data.context || {};
+  const budget = Number(ctx.budget || 0);
   const floors = rows.reduce((n, r) => n + Number(r[1]), 0);
   const ok = floors <= budget;
-  const note = el('div', 'floorNote' + (ok ? ' muted' : ' bad'),
-    `Floors total ${floors.toLocaleString()} of ${Number(budget).toLocaleString()}` +
-    (ok ? ` — ${(budget - floors).toLocaleString()} left to distribute.`
-        : ' — floors exceed the budget. Every layer will be squeezed.'));
-  wrap.append(note);
+
+  const gib = ctx.kv_bytes ? (ctx.kv_bytes / 1073741824).toFixed(2) + ' GiB' : '\u2014';
+  wrap.append(el('div', 'floorNote muted',
+    `Window ${Number(ctx.window || 0).toLocaleString()} tokens`
+    + ` \u2212 ${Number(ctx.reply_tokens || 0).toLocaleString()} reserved for the reply`
+    + ` = ${budget.toLocaleString()} characters of budget`
+    + ` \u00b7 KV cache ${gib}`
+    + (ctx.trained_ctx
+        ? ` \u00b7 model trained to ${Number(ctx.trained_ctx).toLocaleString()}`
+        : '')));
+
+  // Past the trained length a model still loads and still answers, just worse —
+  // so this is a warning, not a refusal.
+  if (ctx.within_trained === false) {
+    wrap.append(el('div', 'floorNote bad',
+      `Window exceeds what this model was trained for`
+      + ` (${Number(ctx.trained_ctx).toLocaleString()}). Quality degrades past the`
+      + ' trained length even when the model loads.'));
+  }
+
+  // Floors are the one constraint the arbiter cannot work around: if they sum
+  // past the budget, every layer is squeezed on every turn. Say so here rather
+  // than waiting for the context panel to report it mid-scene.
+  wrap.append(el('div', 'floorNote' + (ok ? ' muted' : ' bad'),
+    `Floors total ${floors.toLocaleString()} of ${budget.toLocaleString()}` +
+    (ok ? ` \u2014 ${(budget - floors).toLocaleString()} left to distribute.`
+        : ' \u2014 floors exceed the budget. Raise the context window.')));
   return wrap;
 }
 
