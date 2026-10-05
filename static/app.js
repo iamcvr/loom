@@ -242,25 +242,38 @@ function openPC({ storyId = null, defaults = null } = {}) {
     'Age, background, temperament, what you are doing here. Prose, not a stat block — '
     + 'the narrator reads this every turn.', cur.description, { rows: 7 });
 
-  body.append(el('h4', null, (cur.power_label || 'Ability') + ' name'));
-  const powRow = el('div', 'pcRow');
-  const label = el('input');
-  label.type = 'text';
-  label.value = cur.power_label || '';
-  label.placeholder = 'Quirk';
-  label.title = 'What this world calls a power';
-  label.className = 'pcLabel';
-  const pname = el('input');
-  pname.type = 'text';
-  pname.value = cur.power_name || '';
-  powRow.append(label, pname);
-  body.append(powRow);
-  f.power_label = label;
-  f.power_name = pname;
+  /* Powers are opt-in, not a field everyone has to look at. A low-fantasy story
+     with swords and no magic has no use for one, and showing the box anyway
+     teaches the player they are supposed to fill it. The story declares the
+     concept by setting `power_label` in its protagonist block -- Seiran sets
+     "Quirk" -- and a story that declares nothing never shows it. Anything the
+     player wants to say about what they can do goes in "Who you are" instead.
 
-  f.power = pcField(body, 'How it works',
-    'Be specific about the limits — vague powers make vague scenes. This is the text '
-    + 'the narrator uses to decide what you can and cannot do.', cur.power, { rows: 8 });
+     Also shown when a session already HAS power data, so turning the concept off
+     in a story file never hides something a player already wrote. */
+  const hasPower = !!(defaults.power_label || cur.power_label
+                      || cur.power_name || cur.power);
+  if (hasPower) {
+    body.append(el('h4', null, (cur.power_label || defaults.power_label || 'Ability') + ' name'));
+    const powRow = el('div', 'pcRow');
+    const label = el('input');
+    label.type = 'text';
+    label.value = cur.power_label || defaults.power_label || '';
+    label.placeholder = 'Quirk';
+    label.title = 'What this world calls a power';
+    label.className = 'pcLabel';
+    const pname = el('input');
+    pname.type = 'text';
+    pname.value = cur.power_name || '';
+    powRow.append(label, pname);
+    body.append(powRow);
+    f.power_label = label;
+    f.power_name = pname;
+
+    f.power = pcField(body, 'How it works',
+      'Be specific about the limits — vague powers make vague scenes. This is the text '
+      + 'the narrator uses to decide what you can and cannot do.', cur.power, { rows: 8 });
+  }
   f.prompt = pcField(body, 'Appearance',
     'Comma-separated image tags for your portrait. Not used in the prose.',
     cur.prompt, { rows: 3 });
@@ -271,18 +284,20 @@ function openPC({ storyId = null, defaults = null } = {}) {
   const gauge = el('div', 'pcGauge');
   body.append(gauge);
   const CAP = 4500;
+  const val = (k) => (f[k] ? f[k].value : '');
   const measure = () => {
     const n = f.name.value.length + f.description.value.length
-            + f.power.value.length + f.power_name.value.length + 60;
+            + val('power').length + val('power_name').length + 60;
     const over = n > CAP;
     gauge.textContent = over
-      ? `${n} of ${CAP} characters — too long. The end of your ${(f.power_label.value || 'ability').toLowerCase()} `
+      ? `${n} of ${CAP} characters — too long. The end of your ${(val('power_label') || 'character').toLowerCase()} `
         + 'description will be cut from the prompt. Trim it, or raise the '
         + '"protagonist" ceiling under Settings → Context budget.'
       : `${n} of ${CAP} characters`;
     gauge.className = 'pcGauge' + (over ? ' over' : '');
   };
   [f.name, f.description, f.power, f.power_name, f.power_label]
+    .filter(Boolean)
     .forEach((n) => n.addEventListener('input', measure));
   measure();
 
