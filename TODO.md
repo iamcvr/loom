@@ -17,30 +17,6 @@ changing shape underneath them.
 
 ## v1 — finish the engine
 
-### 1. Guard the `num_ctx` / `BUDGET_TOTAL` relationship
-
-ollama truncates the front of an oversized prompt **silently** — the story reads
-as having developed amnesia and the model takes the blame. The constraint is:
-
-```
-(BUDGET_TOTAL / 3.15) + PROSE.max_tokens  <  PROSE.num_ctx
-```
-
-On 2026-10-05 the live config sat **7 tokens** inside it (22,000 chars = 6,985
-tokens, + 1,200 max_tokens = 8,185, against num_ctx 8192).
-
-This should be a startup check and a settings-save validation, not a sentence in
-a help string. `settings.py` already validates the layer-floor table — same
-treatment.
-
-### 2. `OLLAMA_URL` defaults to a Docker service name
-
-`config.py` defaults `LOOM_OLLAMA_URL` and `LOOM_EMBED_URL` to
-`http://ollama:11434`. That hostname does not resolve outside the compose
-network, so a native install fails until the env vars are set — and the failure
-reads as "ollama is down" rather than "that hostname is wrong".
-`http://127.0.0.1:11434` is the better default; Docker can override.
-
 ### 3. The arbiter is optimising the wrong resource
 
 `BUDGET_TOTAL` rations prompt characters because frontier APIs bill per input
@@ -65,7 +41,7 @@ The `ledger` already renders at DEPTH rather than in the system block, so the
 mechanism for separating priority from position exists. Worth measuring the real
 cache hit rate across turns before changing anything.
 
-### 5. Re-evaluate `BUDGET_TOTAL` once §1 is fixed
+### 5. Re-evaluate `BUDGET_TOTAL`
 
 It is 22,000 characters only because `num_ctx` is 8192. ollama already holds
 Cydonia at **ctx=32768**, so raising `num_ctx` lifts the ceiling to roughly
@@ -129,3 +105,32 @@ Open question: should first run **prompt** rather than document? An unconfigured
 loom currently fails at the first turn with a provider error, which is a poor
 first impression. A setup screen that lists what ollama actually holds would be
 better than any README section.
+
+---
+
+## Done
+
+Numbers are kept as they were so older cross-references still resolve.
+
+### 1. ~~Guard the `num_ctx` / `BUDGET_TOTAL` relationship~~ — 2026-10-05
+
+`config.CHARS_PER_TOKEN = 3.15` (measured; the stale 3.6 comment is gone) and
+`settings.context_headroom()` put the arithmetic in one place. `apply_saved()`
+warns at boot, `update()` blocks a hard overflow and names both fixes, `current()`
+exposes the headroom to the UI. A thin margin (<10% of the window) warns rather
+than blocks. `openai_compat` opts out — that server owns its own window.
+
+Found while verifying: the systemd unit did not set `PYTHONUNBUFFERED`, so every
+`print()` diagnostic was invisible in journalctl. Fixed in the unit (outside this
+repo) — **§8 must document it for native installs.**
+
+### 2. ~~`OLLAMA_URL` defaults to a Docker service name~~ — 2026-10-05
+
+`OLLAMA_URL`, `EMBED_URL` and `COMFY_URL` now default to `127.0.0.1`, which is
+right for a native install. The Dockerfile overrides the first two with the
+compose service name. `COMFY_URL` deliberately has no Dockerfile override: a
+container reaches ComfyUI on the host via the bridge gateway, whose address is
+deployment-specific and belongs in compose.
+
+Verified by running with no `LOOM_*_URL` set at all — prose and embeddings both
+work out of the box, which is what §8 depends on.

@@ -196,16 +196,24 @@ LEDGER_SPEC = None
 
 # Native ollama, for the "ollama" prose provider. No /v1 — that is the
 # OpenAI-compat surface, and it cannot carry min_p or top_k.
-OLLAMA_URL = os.environ.get("LOOM_OLLAMA_URL", "http://ollama:11434")
+# Defaults assume ollama on this host, which is what a native install has.
+# A containerised loom reaches it by compose service name instead and sets
+# these in the environment — see the Dockerfile. Getting this backwards is
+# worth avoiding: an unresolvable hostname fails as "cannot reach", which
+# reads as "ollama is down" rather than "that address is wrong".
+OLLAMA_URL = os.environ.get("LOOM_OLLAMA_URL", "http://127.0.0.1:11434")
 
-EMBED_URL = os.environ.get("LOOM_EMBED_URL", "http://ollama:11434")
+EMBED_URL = os.environ.get("LOOM_EMBED_URL", "http://127.0.0.1:11434")
 EMBED_MODEL = os.environ.get("LOOM_EMBED_MODEL", "nomic-embed-text")
 EMBED_ENABLED = True   # off => long-term memory falls back to recency ordering
 
 # ---------------------------------------------------------------- images
 
 IMAGES_ENABLED = os.environ.get("LOOM_IMAGES", "1") == "1"
-COMFY_URL = os.environ.get("LOOM_COMFY_URL", "http://192.168.5.249:8188")
+# Same reasoning as OLLAMA_URL: default to this host. A containerised loom
+# reaches ComfyUI on the host via the bridge gateway, whose address is
+# deployment-specific, so that belongs in compose rather than baked in here.
+COMFY_URL = os.environ.get("LOOM_COMFY_URL", "http://127.0.0.1:8188")
 COMFY_CHECKPOINT = "waiIllustrious.safetensors"
 
 IMG_PORTRAIT = {"width": 832, "height": 1216, "steps": 30, "cfg": 6.0}

@@ -114,8 +114,8 @@ KNOBS: list[dict] = [
     K("PROSE.model", "model", "Models", "Prose model",
       "The model you actually read. Cost lives here.", provider_from="PROSE.provider"),
     K("PROSE.url", "str", "Models", "Prose base URL (openai_compat only)",
-      "Required when the provider is openai_compat, ignored otherwise. For the "
-      "ollama container on this host: http://ollama:11434/v1 — note the /v1, and "
+      "Required when the provider is openai_compat, ignored otherwise. For ollama "
+      "on this host: http://127.0.0.1:11434/v1 — note the /v1, and "
       "note that ollama silently truncates anything past OLLAMA_CONTEXT_LENGTH "
       "rather than erroring, so keep the total budget under the context you "
       "actually loaded the model with."),
