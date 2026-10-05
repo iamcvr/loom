@@ -47,6 +47,16 @@ CHARS_PER_TOKEN = 3.15
 # the last token would truncate on exactly the turns that matter most.
 BUDGET_SAFETY = 0.95
 
+# The ceilings in BUDGET_LAYERS are absolute character counts, sized against a
+# budget of about this much. Above it they scale up in proportion, because a
+# ceiling that does not move makes raising the window pointless for every layer
+# except the transcript — the only one that absorbs slack. Below it they hold at
+# their written values and priority order decides who gets served first, which is
+# what priority order is for and is better than hand-squeezing the table (that was
+# done once, outlived its reason, and silently cut Seiran's world details from
+# every turn for weeks).
+BUDGET_REFERENCE = 96_000
+
 # NOTE: BUDGET_TOTAL above is a fallback. It is DERIVED from the context window at
 # startup and on every settings save — see settings.derive_budget(). The window is
 # the single knob; the character budget follows from it.

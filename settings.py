@@ -547,8 +547,15 @@ def context_report(pending: Optional[dict] = None) -> dict:
     limits = brain.model_limits(plan["model"], provider=plan["provider"])
     per_token = limits.get("kv_bytes_per_token") or 0
     trained = limits.get("trained_ctx") or 0
+    # Written ceilings are stretched by this much, so the panel can explain why a
+    # layer's ceiling is not the number typed into the layers table. Derived from
+    # the PLAN's budget, not the live one, or a preview of a bigger window would
+    # report the stretch it has today instead of the one it is asking for.
+    scale = (max(1.0, plan["budget"] / config.BUDGET_REFERENCE)
+             if config.BUDGET_REFERENCE else 1.0)
     return {
         **plan,
+        "ceiling_scale": round(scale, 2),
         "kv_bytes_per_token": per_token,
         "kv_bytes": per_token * plan["window"],
         "trained_ctx": trained,

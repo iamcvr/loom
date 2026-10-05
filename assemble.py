@@ -314,9 +314,24 @@ def _fit(items: list[str], allowance: int, joiner: str = "\n\n",
     return joiner.join(kept), used, len(items) - len(kept)
 
 
+def ceiling_scale() -> float:
+    """How much the written ceilings are stretched by the current budget.
+
+    Ceilings are absolute counts sized against config.BUDGET_REFERENCE. A bigger
+    budget scales them in proportion, so raising the context window loosens every
+    layer rather than only feeding the transcript. A smaller budget leaves them
+    alone and lets priority order do the rationing.
+    """
+    if not config.BUDGET_REFERENCE:
+        return 1.0
+    return max(1.0, config.BUDGET_TOTAL / config.BUDGET_REFERENCE)
+
+
 def allocate(layers: dict[str, list[str]]) -> dict[str, Any]:
     """Split config.BUDGET_TOTAL across layers in priority order."""
-    spec = {name: (floor, ceil) for name, floor, ceil in config.BUDGET_LAYERS}
+    _scale = ceiling_scale()
+    spec = {name: (floor, int(ceil * _scale))
+            for name, floor, ceil in config.BUDGET_LAYERS}
     order = [name for name, _, _ in config.BUDGET_LAYERS]
 
     sizes = {

@@ -275,3 +275,32 @@ Two lessons:
    model problem. **Check the allocation before blaming the model.**
 2. A ceiling that was derived from content is data. Reorganising a table is not a
    licence to re-guess its values.
+
+### Ceilings scale with the budget, or raising the window does nothing
+
+The ceilings in `BUDGET_LAYERS` are absolute character counts. On their own that
+makes the budget knob nearly inert: raise the context window and the extra budget
+flows only to `transcript`, the one layer that absorbs slack. Every other layer
+stays pinned at a number sized for a smaller machine.
+
+That is how a hand-squeezed table outlived its reason. The table was tightened to
+fit a 20,923-character budget — correct at the time, when an 11,000 ceiling for
+`rules` would have been more than half of everything available — and then the
+window went to 32,768 and nothing connected the two. Seiran kept losing its world
+details and three lore entries on every turn, and the symptom read as a dull model.
+
+    scale = max(1.0, BUDGET_TOTAL / BUDGET_REFERENCE)
+    effective_ceiling = written_ceiling * scale
+
+`BUDGET_REFERENCE = 96_000` is the budget the written ceilings were sized against.
+Above it everything loosens together. At or below it the written values hold and
+**priority order does the rationing**, which is what priority order is for and is
+strictly better than editing the table by hand.
+
+    window  32,768 -> budget  94,467 -> x1.00 -> rules ceiling 11,000
+    window  65,536 -> budget 192,525 -> x2.01 -> rules ceiling 22,060
+    window 131,072 -> budget 388,641 -> x4.05 -> rules ceiling 44,531
+
+The allocation report carries the *effective* ceiling, and the settings panel says
+when the written numbers are being stretched — otherwise the layers table and the
+context panel disagree with each other and both look wrong.

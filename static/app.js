@@ -1773,7 +1773,19 @@ function layerTable(k, rows) {
     + ` \u00b7 KV cache ${gib}`
     + (ctx.trained_ctx
         ? ` \u00b7 model trained to ${Number(ctx.trained_ctx).toLocaleString()}`
+        : '')
+    + (ctx.ceiling_scale > 1
+        ? ` \u00b7 ceilings \u00d7${ctx.ceiling_scale}`
         : '')));
+
+  // The layers table below holds the ceilings as written. A budget above the
+  // reference stretches them, so say so rather than letting the two disagree.
+  if (ctx.ceiling_scale > 1) {
+    wrap.append(el('div', 'floorNote muted',
+      `Ceilings below are shown as written. This budget stretches them by `
+      + `\u00d7${ctx.ceiling_scale}, so a ceiling of 11,000 is really `
+      + `${Math.round(11000 * ctx.ceiling_scale).toLocaleString()}.`));
+  }
 
   // Past the trained length a model still loads and still answers, just worse —
   // so this is a warning, not a refusal.
