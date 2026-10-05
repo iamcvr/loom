@@ -376,9 +376,19 @@ Quality notes from the A/B sheets:
   Images *diverge* — perturbed weights take a different denoising path, so the same
   seed lands on a different valid sample — but neither is better. RMSE and PSNR
   between them are therefore meaningless here; they measure divergence, not quality.
-  Only two small things favour f16: crisper small logo text, and no faint background
-  banding.
 - **16 steps shows no degradation** against 24 in faces, hands or linework.
+- **Two finer claims were made here and both were wrong.** An earlier revision said
+  f16 rendered crisper small logo text and that q4_K showed faint background banding.
+  Both were judged from montage tiles about 300 px wide, downscaled 3.4x from the
+  1024 px originals — exactly the scale at which such detail is destroyed. Re-checked
+  on native-resolution crops: all four configs render the chest logo with equivalent
+  stroke weight and edge definition (the glyphs differ because the samples differ,
+  not the quality), and contrast-stretched flat background regions show no banding in
+  either, with q4_K actually the lower-variance of the two.
+
+  **Method note for anyone repeating this:** compare quality on native-resolution
+  crops of the region in question. A contact sheet is for spotting composition and
+  identity drift, and it cannot support a claim about fine detail.
 - **Unresolved:** one of three frames at 16 steps rendered its shirt trim navy instead
   of red. That is the same sporadic outfit drift already documented, and a different
   step count is a different draw — but whether *fewer steps raises the drift rate* is
