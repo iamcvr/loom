@@ -2189,9 +2189,10 @@ function secStory(d) {
   // all. Without this control a story could only ever be 'play', and raw was
   // reachable only by hand-editing the yaml.
   const modeSel = document.createElement('select');
+  // Only `play` is offered. `raw` and `narrative` still parse and still run --
+  // story.py validates all three -- but neither was developed past a sketch,
+  // and shipping three half-modes is worse than shipping one finished one.
   [['play', 'Play - you are a character in it'],
-   ['raw', 'Raw - you direct; no memory, chapters, lorebook or goals'],
-   ['narrative', 'Narrative - nobody plays; the model writes everyone'],
   ].forEach(([v, label]) => {
     const o = document.createElement('option');
     o.value = v; o.textContent = label;

@@ -88,6 +88,17 @@ def _items_protagonist(pro: Optional[dict]) -> list[str]:
     return out
 
 
+def _items_core() -> list[str]:
+    """The engine's contract, identical for every story.
+
+    Lives in settings rather than in each story file. A story then carries only what
+    is actually its own \u2014 tone, world, cast \u2014 and cannot accidentally omit the rule
+    that makes the player a player.
+    """
+    text = (config.CORE_RULES or "").strip()
+    return [text] if text else []
+
+
 def _items_rules(story: dict, intro: dict) -> list[str]:
     out = [story["rules"].strip()]
     if story.get("details"):
@@ -428,6 +439,7 @@ def _advice(report: list[dict], used: int, budget: int, floors_unmet: bool) -> s
 
 
 _SECTION_TITLES = {
+    "core": None,              # the engine contract; carries its own headings
     "rules": None,             # already carries its own headings
     "protagonist": None,       # carries its own heading
     "arc": None,               # carries its own heading
@@ -444,6 +456,7 @@ _SECTION_TITLES = {
 # Order within the system prompt. Deliberately NOT the priority order: the
 # director's note goes last because recency inside the prompt carries weight.
 _RENDER_ORDER = [
+    "core",
     "rules",
     "protagonist",
     "chapters",
@@ -503,6 +516,7 @@ def build(
 
     layers = {
         "director_notes": _items_director(session_id),
+        "core": _items_core(),
         "rules": _items_rules(story, intro),
         "protagonist": _items_protagonist(pro),
         "arc": _items_arc(current_act(session_id, story)),
@@ -522,7 +536,7 @@ def build(
     # are absent by construction, so a global settings toggle cannot switch them
     # back on underneath a story that was written without them.
     if story.get("mode") == "raw":
-        keep = {"director_notes", "rules", "ledger", "transcript"}
+        keep = {"director_notes", "core", "rules", "ledger", "transcript"}
         layers = {k: (v if k in keep else []) for k, v in layers.items()}
 
     result = allocate(layers)

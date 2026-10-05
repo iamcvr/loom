@@ -78,6 +78,18 @@ KNOBS: list[dict] = [
       "declare what your server was started with and budgeting stays honest. Every "
       "token is KV cache in memory; the settings panel shows what the window costs.",
       min=2048, max=131072, step=1024),
+    K("CORE_RULES", "text", "Story rules", "Rules every story inherits",
+      "The engine's own contract, shared by every story, rendered ahead of the "
+      "story's own rules. It covers the things that make loom what it is rather "
+      "than what any one story is: that the player's character is theirs alone, "
+      "that any input format is accepted without comment, that your narration is "
+      "clean prose, that only one thing happens at a time and the player ends "
+      "scenes, and how long a turn runs. A story file then carries only what is "
+      "actually its own \u2014 tone, world, cast. Before this existed every story "
+      "restated this in its own words, so each said it differently and the "
+      "shortest left it out entirely. Its budget floor matches its length, so the "
+      "arbiter can never cut it.",
+      rows=18),
     K("BUDGET_LAYERS", "layers", "Context budget", "Layer floors and ceilings",
       "Priority order, top to bottom — the arbiter fills each layer in turn. A layer "
       "always gets its floor; it grows toward its ceiling only if budget remains. "
