@@ -1156,6 +1156,27 @@ function renderSuggestions() {
 
 /* ------------------------------------------------------------------ context */
 
+/* Measured latency, never a projection. Two numbers because they answer two
+   different questions, and they map onto two different knobs. */
+function renderTiming(t) {
+  if (!t || !t.last) return;
+  const ms = (v) => (v >= 1000 ? (v / 1000).toFixed(1) + 's' : v + 'ms');
+  const pair = (o) => `${ms(o.ttft_ms)} + ${ms(o.gen_ms)}`;
+  $('ctxTiming').textContent =
+    `prompt + reply \u00b7 last ${pair(t.last)}`
+    + ` \u00b7 med10 ${pair(t.med10)}`
+    + ` \u00b7 mean50 ${pair(t.mean50)}`
+    + ` (${t.turns} turn${t.turns === 1 ? '' : 's'})`;
+  $('ctxTiming').title =
+    'Left: request to first streamed token. Tracks what the PROMPT costs, so a '
+    + 'slow one means the context budget is large.\n'
+    + 'Right: first token to last. Tracks what the REPLY costs, so a slow one '
+    + 'means max tokens is large.\n\n'
+    + 'The left number also includes any model reload and queue wait, so a single '
+    + 'outlier may be a load rather than a budget problem \u2014 which is why the '
+    + 'median and mean are shown beside it.';
+}
+
 function renderContext(c) {
   if (!c) return;
   const pct = Math.round((c.fill || 0) * 100);
@@ -1286,6 +1307,7 @@ async function send(text, retryId, resumeId) {
           if (stick) toBottom(box); else updateLatestButton();
         }
         else if (ev === 'context') { renderContext(data); }
+        else if (ev === 'timing') { renderTiming(data); }
         else if (ev === 'retrying') {
           $('status').textContent =
             `${data.reason} — retrying in ${Math.round(data.delay)}s ` +

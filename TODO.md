@@ -17,19 +17,6 @@ changing shape underneath them.
 
 ## v1 — finish the engine
 
-### 3. The arbiter is optimising the wrong resource
-
-`BUDGET_TOTAL` rations prompt characters because frontier APIs bill per input
-token. Measured locally (`MEASUREMENTS.md`), **generation costs ~13× more per
-token than prefill**, and prefill is KV-cached between turns. So the scarce
-resource is `PROSE.max_tokens`, not `BUDGET_TOTAL` — close to an inversion of the
-current design.
-
-Worth considering: express the budget as a **latency target** ("turns under 90
-seconds") and derive the character budget from a measured prefill/generation rate
-at startup. That is also a far better knob for a stranger on unknown hardware
-than a character count.
-
 ---
 
 ## Anytime
@@ -181,3 +168,32 @@ valve can shorten a chapter but never make one trivially short.
 reason. A per-layer measure was tried first and is worse: `allocate()` grows each
 layer only as far as it asks for, so a layer that fits reads 100% full and the
 trigger would fire every turn.
+
+### 3. ~~The arbiter is optimising the wrong resource~~ — 2026-10-05
+
+Half of this was answered by §5: the budget is no longer a number set blind, it is
+derived from a window whose memory cost is shown.
+
+The other half — expressing the budget as a **latency target** — was considered and
+**rejected**. A target needs a model of the latency/budget relationship, and the
+projections offered during this work were wrong repeatedly and in both directions
+(a prefill rate off by nearly 3x, a cache gap predicted to widen that narrowed, a
+per-layer fill metric that read 100% on a story with five messages). A target built
+on that would be confidently wrong on the author's hardware and worse on a
+stranger's.
+
+Built an instrument instead. Every turn records two measurements on the reply:
+
+    ttft_ms   request -> first streamed token   tracks what the PROMPT costs
+    gen_ms    first token -> last token         tracks what the REPLY costs
+
+Two numbers, two knobs: a slow ttft means the context budget is large, a slow gen
+means max_tokens is large. Reported as last turn / median of 10 / mean of 50, in
+the Context panel next to the fill they relate to.
+
+It does nothing automatically. No threshold, no auto-shrink, no advice carrying a
+number nobody measured. The reader decides.
+
+Honest caveat, carried in the tooltip: ttft also includes a model reload and queue
+wait, so a single outlier can be a load rather than a budget problem — which is why
+the median and mean sit beside it.

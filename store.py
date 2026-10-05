@@ -188,6 +188,15 @@ _ADDED_COLUMNS = [
     # stream ends identically either way, so without this flag a beat cut off
     # mid-sentence was indistinguishable from a beat that ended.
     ("messages", "truncated", "INTEGER NOT NULL DEFAULT 0"),
+    # Measured, not modelled. Projecting turn latency from a prefill rate was
+    # tried and was wrong by a factor of nearly three on this hardware, so loom
+    # times the real thing instead and leaves the judgement to the reader.
+    #   ttft_ms  request -> first streamed token.  Tracks the PROMPT cost.
+    #   gen_ms   first token -> last token.        Tracks the REPLY cost.
+    # Two numbers, two knobs: a slow ttft means the budget is big, a slow gen
+    # means max_tokens is big.
+    ("messages", "ttft_ms", "INTEGER NOT NULL DEFAULT 0"),
+    ("messages", "gen_ms", "INTEGER NOT NULL DEFAULT 0"),
 ]
 _migrated = False
 
@@ -606,6 +615,51 @@ def set_memory_embedding(memory_id: int, vec: Iterable[float]) -> None:
             "UPDATE memories SET embedding=? WHERE id=?", (pack_embedding(vec), memory_id)
         )
 
+
+
+# ---------------------------------------------------------------- turn timing
+
+
+def record_timing(msg_id: int, ttft_ms: int, gen_ms: int) -> None:
+    """Attach measured latency to the reply it belongs to."""
+    with _conn() as c:
+        c.execute("UPDATE messages SET ttft_ms=?, gen_ms=? WHERE id=?",
+                  (max(0, int(ttft_ms)), max(0, int(gen_ms)), msg_id))
+
+
+def timing_stats(session_id: int, limit: int = 50) -> Optional[dict]:
+    """Last turn, median of 10, mean of 50 — in milliseconds.
+
+    Rows with gen_ms = 0 are skipped: those predate the columns, or are turns
+    that failed before producing a token, and either way they are not latency
+    measurements. Newest first.
+    """
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT ttft_ms, gen_ms FROM messages "
+            "WHERE session_id=? AND role='assistant' AND gen_ms>0 "
+            "ORDER BY id DESC LIMIT ?", (session_id, limit)).fetchall()
+    if not rows:
+        return None
+    ttft = [int(r["ttft_ms"]) for r in rows]
+    gen = [int(r["gen_ms"]) for r in rows]
+
+    def med(xs: list[int]) -> int:
+        if not xs:
+            return 0
+        xs = sorted(xs)
+        n = len(xs)
+        return xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) // 2
+
+    def mean(xs: list[int]) -> int:
+        return sum(xs) // len(xs) if xs else 0
+
+    return {
+        "turns": len(rows),
+        "last": {"ttft_ms": ttft[0], "gen_ms": gen[0]},
+        "med10": {"ttft_ms": med(ttft[:10]), "gen_ms": med(gen[:10])},
+        "mean50": {"ttft_ms": mean(ttft), "gen_ms": mean(gen)},
+    }
 
 # ---------------------------------------------------------------- relationships
 

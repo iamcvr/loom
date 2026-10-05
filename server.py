@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import sys
+import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -196,10 +197,23 @@ def run_turn(session_id: int, user_text: str, emit: Callable[[str, Any], None],
 
     # --- prose
     stopped: list[str] = []
+
+    # Measured, not projected. Two clocks, because they answer different
+    # questions: time to the FIRST token tracks what the prompt costs, and the
+    # span from first to last tracks what the reply costs. One is the budget
+    # knob, the other is max_tokens.
+    t_start = time.perf_counter()
+    first_at: list[float] = []
+
+    def _on_token(t: str) -> None:
+        if not first_at:
+            first_at.append(time.perf_counter())
+        emit("token", t)
+
     try:
         reply = brain.prose(
             packet["system"], packet["messages"],
-            on_token=lambda t: emit("token", t),
+            on_token=_on_token,
             # The provider's own word for why it stopped. "max_tokens" means the
             # reply is unfinished, which the stream itself cannot express.
             on_stop=stopped.append,
@@ -242,6 +256,17 @@ def run_turn(session_id: int, user_text: str, emit: Callable[[str, Any], None],
         digest_text = reply
         emit("message", {"id": mid, "role": "assistant", "content": reply,
                          "turn": turn, "truncated": cut})
+
+    # Latency, attached to the reply it describes. Both store paths above set
+    # `mid`, so a resumed turn is measured too — its ttft is the resume's, which
+    # is the honest number for the request that was actually made.
+    _end = time.perf_counter()
+    _first = first_at[0] if first_at else _end
+    store.record_timing(mid, int((_first - t_start) * 1000),
+                        int((_end - _first) * 1000))
+    stats = store.timing_stats(session_id)
+    if stats:
+        emit("timing", stats)
 
     if cut:
         # Say so. A beat that stops mid-sentence with no explanation reads as the
