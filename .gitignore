@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Editor / working backups
+*.bak
+*.bak-*
+
+# Runtime state. Lives outside the repo via LOOM_STATE, but never commit it.
+state/
+loom-state/
+*.db
+*.db-shm
+*.db-wal
+
+# The story library is personal. stories/README.md is documentation and IS tracked.
+stories/*
+!stories/README.md
+
+# Sweep output
+*.jsonl

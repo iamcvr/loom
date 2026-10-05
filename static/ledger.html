@@ -1,0 +1,145 @@
+<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ledger — loom</title><style>
+:root{--bg:#f7f7f5;--fg:#1a1a18;--mut:#6b6b66;--line:#dcdcd6;--card:#fff;
+--ok:#1c7c4a;--warn:#a8541b;--acc:#3b5bdb}
+@media(prefers-color-scheme:dark){:root{--bg:#16161a;--fg:#e8e8e4;--mut:#96968e;
+--line:#32323a;--card:#1e1e24;--ok:#57c98a;--warn:#e0965a;--acc:#8da2fb}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);
+font:15px/1.55 ui-sans-serif,system-ui,sans-serif}
+header{position:sticky;top:0;z-index:9;background:var(--bg);
+border-bottom:2px solid var(--acc);padding:12px 20px;display:flex;
+gap:14px;align-items:center;flex-wrap:wrap}
+h1{font-size:16px;margin:0;font-weight:700;letter-spacing:.02em}
+h1 span{color:var(--acc)}
+select,input,textarea,button{font:inherit;color:var(--fg);background:var(--card);
+border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+button{cursor:pointer}button:hover{border-color:var(--mut)}
+button.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+button.no{color:var(--warn)}
+main{max-width:1000px;margin:0 auto;padding:20px}
+section{margin-bottom:28px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);
+margin:0 0 4px;display:flex;gap:10px;align-items:center}
+.sub{color:var(--mut);font-size:13px;margin:0 0 12px}
+.f{background:var(--card);border:1px solid var(--line);border-radius:8px;
+padding:10px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start}
+.f.prop{border-color:var(--warn);border-left-width:4px}
+.f textarea{flex:1;border:none;background:transparent;resize:vertical;padding:2px;
+min-height:2.6em}
+.f select{font-size:12px;padding:3px 6px}
+.acts{display:flex;gap:6px;flex-shrink:0}
+.bar{display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
+.pill{font-size:12px;padding:2px 10px;border-radius:20px;border:1px solid var(--line);
+color:var(--mut)}
+.pill.warn{color:var(--warn);border-color:var(--warn)}
+.empty{color:var(--mut);font-style:italic;padding:8px 0}
+.note{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--acc);
+border-radius:8px;padding:12px 14px;margin-bottom:20px;color:var(--mut);font-size:13px}
+.note b{color:var(--fg)}
+</style></head><body>
+<header>
+  <h1>loom <span>/ Ledger</span></h1>
+  <select id="sess"></select>
+  <span class="pill" id="cActive"></span>
+  <span class="pill warn" id="cProp"></span>
+  <span style="flex:1"></span>
+  <a href="/" style="color:var(--mut);font-size:13px">&larr; back to loom</a>
+</header>
+<main>
+<div class="note">
+  <b>This is not Memory and not the Lorebook.</b> Memory is automatic and decays;
+  the Lorebook fires on keywords. The Ledger is <b>only</b> what you approve here,
+  and every approved fact goes into every turn until you remove it.
+  Facts are proposed automatically when the context window reaches
+  <b>Settings &rarr; Ledger &rarr; Propose facts at fill</b>.
+</div>
+
+<section>
+  <h2>Waiting for you <span class="pill warn" id="nProp"></span></h2>
+  <p class="sub">Proposed by the model. Nothing here is in the prompt yet. Expect
+     to bin roughly half &mdash; scene detail gets proposed alongside real facts.</p>
+  <div class="bar" id="propBar" hidden>
+    <button class="ok" onclick="bulk('accept_all')">accept all</button>
+    <button class="no" onclick="bulk('dismiss_all')">dismiss all</button>
+  </div>
+  <div id="proposed"></div>
+</section>
+
+<section>
+  <h2>In the prompt <span class="pill" id="nActive"></span></h2>
+  <p class="sub">Sent with every turn, just before generation.</p>
+  <div class="bar">
+    <input id="newText" placeholder="add a fact yourself&hellip;" style="flex:1;min-width:260px">
+    <select id="newKind"></select>
+    <button onclick="addOwn()">add</button>
+  </div>
+  <div id="active"></div>
+</section>
+
+<section>
+  <h2>Binned <span class="pill" id="nDis"></span></h2>
+  <p class="sub">Kept so the model is not re-proposing them every review.</p>
+  <div id="dismissed"></div>
+</section>
+</main>
+<script>
+let S=null, D=null, KINDS=[];
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const opts=(k)=>KINDS.map(x=>`<option ${x===k?'selected':''}>${x}</option>`).join('');
+
+async function post(b){await fetch('/api/ledger',{method:'POST',
+  headers:{'content-type':'application/json'},body:JSON.stringify({session:S,...b})});
+  await load();}
+const act=(id,a)=>post({action:a,id});
+const bulk=a=>post({action:a});
+const del=id=>post({action:'delete',id});
+function save(id,el){const row=el.closest('.f');
+  post({action:'update',id,text:row.querySelector('textarea').value,
+        kind:row.querySelector('select').value});}
+function addOwn(){const t=$('#newText').value.trim(); if(!t)return;
+  $('#newText').value=''; post({action:'add',text:t,kind:$('#newKind').value});}
+
+function row(f,mode){
+  return `<div class="f ${mode==='prop'?'prop':''}">
+    <select onchange="save(${f.id},this)">${opts(f.kind)}</select>
+    <textarea onblur="save(${f.id},this)">${esc(f.text)}</textarea>
+    <div class="acts">${
+      mode==='prop'
+        ? `<button class="ok" onclick="act(${f.id},'accept')">keep</button>
+           <button class="no" onclick="act(${f.id},'dismiss')">bin</button>`
+      : mode==='dis'
+        ? `<button onclick="act(${f.id},'restore')">restore</button>
+           <button class="no" onclick="del(${f.id})">delete</button>`
+        : `<button class="no" onclick="del(${f.id})">remove</button>`}</div>
+  </div>`;
+}
+function paint(id,list,mode,empty){
+  $(id).innerHTML = list.length ? list.map(f=>row(f,mode)).join('')
+                                : `<div class="empty">${empty}</div>`;
+}
+async function load(){
+  D = await (await fetch('/api/ledger?session='+S)).json();
+  KINDS = D.kinds; $('#newKind').innerHTML = opts('state');
+  const c = D.counts;
+  $('#cActive').textContent = `${c.active} in prompt`;
+  $('#cProp').textContent = `${c.proposed} waiting`;
+  $('#cProp').hidden = !c.proposed;
+  $('#nProp').textContent = c.proposed; $('#nActive').textContent = `${c.active} / ${D.max_active}`;
+  $('#nDis').textContent = c.dismissed;
+  $('#propBar').hidden = !c.proposed;
+  paint('#proposed', D.proposed, 'prop', 'Nothing waiting. Facts appear here when the window fills.');
+  paint('#active', D.active, 'act', 'No facts yet.');
+  paint('#dismissed', D.dismissed, 'dis', 'Nothing binned.');
+}
+(async()=>{
+  const ss = await (await fetch('/api/sessions')).json();
+  const want = +(new URLSearchParams(location.search).get('session') || 0);
+  S = want || (ss[0] && ss[0].id);
+  $('#sess').innerHTML = ss.map(s=>`<option value="${s.id}" ${s.id===S?'selected':''}>
+    ${esc(s.title)} — turn ${s.turn}</option>`).join('');
+  $('#sess').onchange = e => { S = +e.target.value; load(); };
+  load(); setInterval(load, 15000);
+})();
+</script></body></html>

@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+"""Settings profiles for loom.
+
+Six feature toggles and a twelve-row budget table stand between "full harness"
+and "raw prose test". Flipping them by hand in the UI is slow and, worse, easy
+to half-apply — the failure mode is a run you think is raw that still has the
+lorebook firing.
+
+A profile is a COMPLETE override set, not a patch. Loading one resets every
+setting the profile does not mention, so `load raw` after `load full` cannot
+leave anything behind. That is the whole reason this exists.
+
+Everything goes through loom's own /api/settings, so changes are validated,
+applied all-or-nothing, and live immediately — no restart, no root-owned file
+edited underneath a running container.
+
+    loomprof list                 what profiles exist, and which one is live
+    loomprof current              settings currently overridden
+    loomprof save <name>          snapshot the live overrides as <name>
+    loomprof diff <name>          what `load <name>` would change
+    loomprof load <name>          apply it
+    loomprof model <id>           swap just the prose model (see below)
+
+`model` is the one shortcut, because "try the next contender" is the loop this
+is built for. An ollama tag routes to atlas's ollama over openai_compat; a
+claude-* id routes back to Anthropic.
+
+    loomprof model gemma3:12b
+    loomprof model claude-sonnet-5
+"""
+
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+BASE = os.environ.get("LOOM_URL", "http://localhost:8100")
+PROFILES = Path(os.environ.get("LOOM_PROFILES",
+                               Path(__file__).resolve().parent / "profiles"))
+OLLAMA = "http://ollama:11434/v1"
+
+
+def api(path, payload=None):
+    req = urllib.request.Request(
+        BASE + path,
+        data=json.dumps(payload).encode() if payload is not None else None,
+        headers={"content-type": "application/json"},
+        method="POST" if payload is not None else "GET")
+    try:
+        return json.load(urllib.request.urlopen(req, timeout=30))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")
+        try:
+            body = json.loads(body).get("error", body)
+        except ValueError:
+            pass
+        die(f"{path} -> HTTP {e.code}: {body}")
+    except urllib.error.URLError as e:
+        die(f"cannot reach loom at {BASE}: {e.reason}")
+
+
+def die(msg):
+    print(f"loomprof: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def live():
+    """{key: value} for every setting currently overridden."""
+    return {k["key"]: k["value"] for k in api("/api/settings")["knobs"]
+            if k["overridden"]}
+
+
+def profile_path(name):
+    return PROFILES / f"{name}.json"
+
+
+def read_profile(name):
+    p = profile_path(name)
+    if not p.exists():
+        have = ", ".join(sorted(x.stem for x in PROFILES.glob("*.json"))) or "none"
+        die(f"no profile '{name}'. have: {have}")
+    return json.loads(p.read_text())
+
+
+def fmt(v):
+    if isinstance(v, list):
+        return f"<{len(v)} layers>"
+    return json.dumps(v)
+
+
+def plan(target):
+    """(to_reset, to_apply) — reset comes first so nothing bleeds through."""
+    now = live()
+    to_reset = sorted(set(now) - set(target))
+    to_apply = {k: v for k, v in target.items() if now.get(k) != v}
+    return to_reset, to_apply
+
+
+# ---------------------------------------------------------------- commands
+
+def cmd_list():
+    PROFILES.mkdir(parents=True, exist_ok=True)
+    now = live()
+    names = sorted(p.stem for p in PROFILES.glob("*.json"))
+    if not names:
+        print("no profiles yet — `loomprof save <name>` to make one")
+        return
+    for n in names:
+        match = "*" if read_profile(n) == now else " "
+        print(f" {match} {n}")
+    if not any(read_profile(n) == now for n in names):
+        print("\n(no profile matches the live settings — `save` to capture them)")
+
+
+def cmd_current():
+    now = live()
+    if not now:
+        print("no overrides — everything is at config.py defaults")
+        return
+    for k, v in sorted(now.items()):
+        print(f"  {k:<28} {fmt(v)}")
+
+
+def cmd_save(name):
+    PROFILES.mkdir(parents=True, exist_ok=True)
+    now = live()
+    profile_path(name).write_text(json.dumps(now, indent=2) + "\n")
+    print(f"saved {len(now)} overrides to {profile_path(name)}")
+
+
+def cmd_diff(name):
+    to_reset, to_apply = plan(read_profile(name))
+    if not to_reset and not to_apply:
+        print(f"'{name}' is already live — nothing to change")
+        return
+    now = live()
+    for k in to_reset:
+        print(f"  reset  {k:<28} {fmt(now[k])} -> default")
+    for k, v in sorted(to_apply.items()):
+        was = fmt(now[k]) if k in now else "default"
+        print(f"  set    {k:<28} {was} -> {fmt(v)}")
+
+
+def cmd_load(name):
+    target = read_profile(name)
+    to_reset, to_apply = plan(target)
+    if not to_reset and not to_apply:
+        print(f"'{name}' is already live")
+        return
+    if to_reset:
+        api("/api/settings/reset", {"keys": to_reset})
+    if to_apply:
+        out = api("/api/settings", {"changes": to_apply})
+        for w in out.get("warnings") or []:
+            print(f"  warning: {w}")
+    print(f"loaded '{name}' ({len(to_reset)} reset, {len(to_apply)} set)")
+
+
+def cmd_model(ident):
+    if ident.startswith("claude-") or ident.startswith("grok-"):
+        changes = {"PROSE.provider": "anthropic" if ident.startswith("claude-")
+                   else "xai", "PROSE.model": ident}
+    else:
+        changes = {"PROSE.provider": "openai_compat", "PROSE.url": OLLAMA,
+                   "PROSE.model": ident}
+    out = api("/api/settings", {"changes": changes})
+    for w in out.get("warnings") or []:
+        print(f"  warning: {w}")
+    print(f"prose model -> {ident}")
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help", "help"):
+        print(__doc__.strip())
+        return
+    cmd, rest = args[0], args[1:]
+    table = {"list": (cmd_list, 0), "current": (cmd_current, 0),
+             "save": (cmd_save, 1), "diff": (cmd_diff, 1),
+             "load": (cmd_load, 1), "model": (cmd_model, 1)}
+    if cmd not in table:
+        die(f"unknown command '{cmd}' (try --help)")
+    fn, n = table[cmd]
+    if len(rest) != n:
+        die(f"'{cmd}' takes {n} argument{'' if n == 1 else 's'}")
+    fn(*rest)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>loom</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+
+<div id="boot" class="boot">
+  <div class="bootTop">
+    <h1>loom</h1>
+    <div class="grow"></div>
+    <button id="btnSettings" class="ghost" title="Settings">Settings</button>
+  </div>
+  <div id="bootStories" class="cards"></div>
+  <h2>Continue</h2>
+  <div id="bootSessions" class="cards"></div>
+  <div id="bootHealth" class="muted small"></div>
+</div>
+
+<div id="settings" class="screen hidden">
+  <header class="bar">
+    <button id="setBack" class="ghost" title="Back">&#8592;</button>
+    <div class="title"><strong>Settings</strong></div>
+    <div class="grow"></div>
+    <span id="setStatus" class="muted small"></span>
+    <button id="setReset" class="ghost">Reset all</button>
+    <button id="setSave" class="primary" disabled>Save</button>
+  </header>
+  <div class="setMain">
+    <nav id="setNav" class="setNav"></nav>
+    <div id="setBody" class="setBody"></div>
+  </div>
+</div>
+
+<div id="editor" class="screen hidden">
+  <header class="bar">
+    <button id="edBack" class="ghost" title="Back">&#8592;</button>
+    <div class="title">
+      <strong id="edTitle">New story</strong>
+      <span id="edIdLabel" class="muted small"></span>
+    </div>
+    <div class="grow"></div>
+    <span id="edStatus" class="muted small"></span>
+    <button id="edDup" class="ghost hidden">Duplicate</button>
+    <button id="edDel" class="ghost danger hidden">Delete</button>
+    <button id="edCheck" class="ghost">Check</button>
+    <button id="edSave" class="primary">Save</button>
+  </header>
+  <div id="edProblems" class="problems hidden"></div>
+  <div class="setMain">
+    <nav id="edNav" class="setNav"></nav>
+    <div id="edBody" class="setBody"></div>
+  </div>
+</div>
+
+<div id="app" class="app hidden">
+
+  <header class="bar">
+    <button id="btnBack" class="ghost" title="Sessions">&#8592;</button>
+    <div class="title">
+      <strong id="storyName">—</strong>
+      <span id="turnLabel" class="muted small"></span>
+    </div>
+    <button id="chapChip" class="chapChip" title="Chapters"></button>
+  <button id="actChip" class="chapChip actChip hidden" title="Act"></button>
+    <div class="grow"></div>
+    <div id="ctxMeter" class="meter" title="Context budget">
+      <div id="ctxFill" class="meterFill"></div>
+      <span id="ctxLabel" class="meterLabel"></span>
+    </div>
+    <button id="btnSettings2" class="ghost" title="Settings">&#9881;</button>
+    <button id="btnPanels" class="ghost" title="Panels">&#9776;</button>
+  </header>
+
+  <main class="main">
+    <section class="chat">
+      <div id="scene" class="scene hidden">
+        <div class="sceneImg"><img id="sceneImg" alt="Scene"></div>
+        <button id="sceneToggle" class="sceneToggle" type="button"></button>
+      </div>
+      <div id="chapNotice" class="chapNotice hidden"></div>
+      <div class="messagesWrap">
+        <div id="messages" class="messages"></div>
+        <button id="toLatest" class="toLatest hidden">↓ latest</button>
+      </div>
+      <div id="suggestions" class="suggestions"></div>
+      <form id="composer" class="composer">
+        <textarea id="input" rows="2" placeholder="What do you do?" autocomplete="off"></textarea>
+        <button id="send" type="submit">Send</button>
+      </form>
+      <div id="status" class="status muted small"></div>
+    </section>
+
+    <aside id="panels" class="panels">
+      <div id="youPanel" class="panel hidden">
+        <h3>You <span class="grow"></span>
+          <button id="btnYou" class="ghost small">Edit</button>
+        </h3>
+        <div id="you" class="you"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Stats</h3>
+        <div id="stats" class="stats"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Goals <span id="goalPending" class="pill hidden"></span></h3>
+        <div id="goals"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Lorebook <span id="loreNew" class="pill hidden"></span>
+          <span id="loreCounts" class="muted small"></span>
+          <span class="grow"></span>
+          <button id="btnLore" class="ghost small">Add</button>
+        </h3>
+        <div id="loreSuggest" class="loreSuggest"></div>
+        <div id="lore" class="lore"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Cast <span class="grow"></span>
+          <button id="btnCast" class="ghost small">Expand</button>
+        </h3>
+        <div id="cast" class="cast"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Chapters <span class="grow"></span>
+          <button id="btnChapters" class="ghost small">Open</button>
+        </h3>
+        <div id="chapterList" class="chapterList"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Ledger <span id="ledgerNew" class="pill hidden"></span>
+          <span id="ledgerCounts" class="muted small"></span>
+          <span class="grow"></span>
+          <a id="btnLedgerAll" class="ghost small" href="/ledger">All</a>
+        </h3>
+        <div id="ledgerProposed" class="loreSuggest"></div>
+        <div id="ledgerActive" class="lore"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Director's note</h3>
+        <textarea id="notes" rows="3"
+          placeholder="Highest priority. Use this to correct drift — e.g. &quot;It has been two weeks.&quot;"></textarea>
+        <div id="notesSaved" class="muted small"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Context</h3>
+        <div id="ctxLayers" class="layers"></div>
+        <div id="ctxAdvice" class="muted small"></div>
+        <button id="btnPrompt" class="ghost small">View assembled prompt</button>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<dialog id="chapDlg" class="dlg chapDlg">
+  <header>
+    <strong id="chapDlgTitle">Close chapter</strong>
+    <div class="grow"></div>
+    <span id="chapDlgStatus" class="muted small"></span>
+    <button id="chapCancel" class="ghost">Cancel</button>
+  </header>
+  <div id="chapDlgBody" class="chapBody"></div>
+  <footer>
+    <div id="chapWhy" class="muted small"></div>
+    <div class="grow"></div>
+    <button id="chapAccept" class="primary">Accept &amp; continue</button>
+  </footer>
+</dialog>
+
+<dialog id="askDlg" class="dlg askDlg">
+  <div id="askText" class="askText"></div>
+  <footer>
+    <div class="grow"></div>
+    <button id="askNo" class="ghost">Cancel</button>
+    <button id="askYes" class="primary">Delete</button>
+  </footer>
+</dialog>
+
+<dialog id="pcDlg" class="dlg chapDlg">
+  <header>
+    <strong id="pcDlgTitle">Who are you?</strong>
+    <div class="grow"></div>
+    <span id="pcStatus" class="muted small"></span>
+    <button id="pcCancel" class="ghost">Cancel</button>
+  </header>
+  <div id="pcBody" class="chapBody"></div>
+  <footer>
+    <button id="pcReset" class="ghost">Use the default</button>
+    <div class="grow"></div>
+    <button id="pcSave" class="primary">Begin</button>
+  </footer>
+</dialog>
+
+<dialog id="loreDlg" class="dlg loreDlg">
+  <header>
+    <strong id="loreDlgTitle">Lorebook entry</strong>
+    <div class="grow"></div>
+    <span id="loreStatus" class="muted small"></span>
+    <button id="loreCancel" class="ghost">Cancel</button>
+  </header>
+  <div id="loreBody" class="chapBody"></div>
+  <footer>
+    <button id="loreDelete" class="ghost hidden">Delete</button>
+    <div class="grow"></div>
+    <button id="loreSave" class="primary">Save</button>
+  </footer>
+</dialog>
+
+<dialog id="castDlg" class="dlg castDlg">
+  <header>
+    <strong>Cast</strong>
+    <div class="grow"></div>
+    <button id="castClose" class="ghost">Close</button>
+  </header>
+  <div class="castBody">
+    <div id="castList" class="castList"></div>
+    <div id="castDetail" class="castDetail"></div>
+  </div>
+</dialog>
+
+<dialog id="lightbox" class="lightbox">
+  <img id="lightboxImg" alt="">
+  <div id="lightboxCap" class="cap"></div>
+</dialog>
+
+<dialog id="promptDlg" class="dlg">
+  <h3>Assembled prompt</h3>
+  <pre id="promptText"></pre>
+  <button onclick="document.getElementById('promptDlg').close()">Close</button>
+</dialog>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

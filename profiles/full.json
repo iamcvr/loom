@@ -1,0 +1,68 @@
+{
+  "BUDGET_TOTAL": 200000,
+  "BUDGET_LAYERS": [
+    [
+      "director_notes",
+      0,
+      2000
+    ],
+    [
+      "rules",
+      1500,
+      15000
+    ],
+    [
+      "protagonist",
+      800,
+      4500
+    ],
+    [
+      "arc",
+      400,
+      2500
+    ],
+    [
+      "chapters",
+      800,
+      8000
+    ],
+    [
+      "nudge",
+      300,
+      1600
+    ],
+    [
+      "state",
+      300,
+      2500
+    ],
+    [
+      "goals",
+      0,
+      1000
+    ],
+    [
+      "long_memory",
+      0,
+      5000
+    ],
+    [
+      "keyword_notes",
+      0,
+      14000
+    ],
+    [
+      "temp_memory",
+      0,
+      6000
+    ],
+    [
+      "transcript",
+      8000,
+      120000
+    ]
+  ],
+  "PROSE.model": "claude-opus-5",
+  "PROSE.thinking": "adaptive",
+  "UTILITY.model": "claude-haiku-4-5-20251001"
+}
