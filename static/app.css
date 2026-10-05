@@ -707,8 +707,12 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
   font-size: .78rem; letter-spacing: .05em; text-transform: uppercase; opacity: .6; }
 /* The log is kept until the panel is closed or the page reloads — a proposal is
    worth re-reading after you have looked at the knob it names. */
-.adviseHeadBtns { display: flex; gap: 2px; }
-.adviseHeadBtns button { padding: 0 6px; line-height: 1.2; }
+.adviseHeadBtns { display: flex; gap: 4px; }
+/* The header is a .78rem uppercase label and buttons take `font: inherit` from
+   the global rule, so without an explicit size these come out as tiny caps. The
+   padding is restored to button.ghost's own, which an earlier override had cut. */
+.adviseHeadBtns button { font-size: 15px; line-height: 1; padding: 4px 9px;
+  min-width: 30px; text-transform: none; }
 /* Scaled by the +/- buttons. The site's .small is an absolute 12.5px, so the
    children have to be re-expressed in em or they ignore the setting entirely. */
 .adviseLog { max-height: min(26rem, 55vh); overflow-y: auto;
