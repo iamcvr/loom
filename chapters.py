@@ -117,13 +117,25 @@ def close(
     return store.open_chapter(session_id)   # opens the next one
 
 
-def due(session_id: int) -> bool:
-    """Has the open chapter run long enough to compact?
+def due(session_id: int, fill: float = 0.0) -> bool:
+    """Has the open chapter run long enough — or filled up enough — to compact?
 
     Turn count is the trigger the author asked for, and it is the right one: it
     makes chapters a predictable length regardless of how the budget happens to be
-    behaving. The transcript-shedding check underneath it is a safety valve for
-    very long turns, which can overflow the window well before turn twenty.
+    behaving. A chapter should end because twenty turns of story happened, not
+    because a buffer filled.
+
+    Underneath it sits a safety valve, which this docstring described for a while
+    before the code did any such thing. Long turns can fill the budget well before
+    turn twenty, and once it is full the arbiter sheds the oldest transcript on
+    every turn — losing history AND invalidating the cached prefix each time.
+    Compacting early turns that shedding into a summary, which is what chapters are
+    for. CHAPTER_MIN_TURNS still floors it, so the valve can shorten a chapter but
+    never make one trivially short.
+
+    `fill` is the whole-budget fill from the packet, the same signal ledger.due()
+    takes. A per-layer measure looks more precise and is not: allocate() grows each
+    layer only as far as it asks for, so a layer that fits always reads 100% full.
     """
     if not config.CHAPTERS_ENABLED:
         return False
@@ -131,7 +143,9 @@ def due(session_id: int) -> bool:
     turns_in = store.current_turn(session_id) - int(ch["start_turn"] or 0)
     if turns_in < config.CHAPTER_MIN_TURNS:
         return False
-    return turns_in >= config.CHAPTER_EVERY_TURNS
+    if turns_in >= config.CHAPTER_EVERY_TURNS:
+        return True
+    return fill >= config.CHAPTER_TRIGGER_FILL
 
 
 def compact(session_id: int, story: dict) -> Optional[dict]:

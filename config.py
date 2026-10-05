@@ -329,6 +329,14 @@ RESUME_TURN_TEXT = (
 CHAPTERS_ENABLED = True
 CHAPTER_EVERY_TURNS = 20     # auto-compact this many turns into a chapter
 CHAPTER_MIN_TURNS = 8        # never compact sooner than this, even under pressure
+# The safety valve under the turn count. A long-winded stretch can fill the budget
+# well before turn twenty, and once it is full the arbiter starts shedding the
+# oldest transcript every single turn — which both loses history and destroys the
+# cached prefix (see MEASUREMENTS.md). Compacting early turns that shedding into a
+# summary instead, which is the whole point of chapters. Measured against the same
+# whole-budget fill the ledger review uses.
+# Fires BEFORE the allowance is full, for the same reason LEDGER_TRIGGER_FILL does.
+CHAPTER_TRIGGER_FILL = 0.85
 CHAPTER_OVERLAP_MSGS = 3     # exchanges carried past a break so the voice doesn't cut
 CHAPTER_VERBATIM = 3         # recent chapter summaries kept in full
 

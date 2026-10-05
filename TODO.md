@@ -30,21 +30,6 @@ seconds") and derive the character budget from a measured prefill/generation rat
 at startup. That is also a far better knob for a stranger on unknown hardware
 than a character count.
 
-### 9. Compaction should trigger on fill, not only on turn count
-
-`CHAPTER_EVERY_TURNS = 20` with a 1,200-token reply ceiling can produce more
-transcript than the allowance holds, so the `transcript[-kept:]` safety valve
-fires for the back half of each chapter — and once it does, the prefix slides
-every turn and the §4 caching win is lost for those turns.
-
-`LEDGER_TRIGGER_FILL = 0.85` already does exactly this for the ledger review, with
-the reasoning written down. Chapters want the same treatment, or the two numbers
-want deriving from one another the way the budget now derives from the window.
-
-Measure first: how many turns a chapter actually runs before the valve fires.
-
----
-
 ---
 
 ## Anytime
@@ -176,3 +161,23 @@ Set `DEPTH_LAYERS = ()` to restore the old layout and A/B the prose.
 
 Verified: a relationship upsert leaves the system block byte-identical while the
 change still reaches the model at depth.
+
+### 9. ~~Compaction should trigger on fill, not only on turn count~~ — 2026-10-05
+
+`chapters.due()`'s own docstring already described a transcript-shedding safety
+valve "underneath" the turn count. The code did not have one — it was just
+`turns_in >= CHAPTER_EVERY_TURNS`. Now it has one:
+
+    if turns_in < CHAPTER_MIN_TURNS:      return False   # narrative floor
+    if turns_in >= CHAPTER_EVERY_TURNS:   return True    # the author's trigger
+    return fill >= CHAPTER_TRIGGER_FILL                  # the valve
+
+Turn count stays primary on purpose — a chapter should end because twenty turns of
+story happened, not because a buffer filled — and `CHAPTER_MIN_TURNS` means the
+valve can shorten a chapter but never make one trivially short.
+
+`fill` is the whole-budget fill from the packet, the same signal
+`ledger.due()` already takes, fired at the same 0.85 and for the same written-down
+reason. A per-layer measure was tried first and is worse: `allocate()` grows each
+layer only as far as it asks for, so a layer that fits reads 100% full and the
+trigger would fire every turn.

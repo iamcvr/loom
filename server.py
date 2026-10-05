@@ -275,7 +275,7 @@ def run_turn(session_id: int, user_text: str, emit: Callable[[str, Any], None],
     # means the reply is already on screen and the delay is invisible; running it
     # before the prose would put it directly in the player's way, every twentieth
     # turn, for no benefit they can perceive.
-    if not raw_mode and chapters_mod.due(session_id):
+    if not raw_mode and chapters_mod.due(session_id, packet.get("fill", 0.0)):
         done = chapters_mod.compact(session_id, st)
         if done:
             emit("chapter", done)

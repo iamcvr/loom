@@ -198,6 +198,13 @@ KNOBS: list[dict] = [
       "How long a chapter runs before it is summarised and its turns are released "
       "from the prompt. Shorter chapters free more budget and lose more detail.",
       min=5, max=100, step=1),
+    K("CHAPTER_TRIGGER_FILL", "float", "Chapters", "Compact early at this fill",
+      "Safety valve under the turn count. When the context budget is this full, "
+      "compact now rather than waiting — otherwise the arbiter starts "
+      "shedding the oldest messages every turn, which loses history and forces the "
+      "whole prompt to be reprocessed. At 1.0 it only fires once the budget is "
+      "completely full, i.e. reactively, which is the behaviour this replaced.",
+      min=0.5, max=1.0, step=0.05),
     K("CHAPTER_MIN_TURNS", "int", "Chapters", "Never compact before N turns",
       "Floor, so a burst of very long turns cannot trigger a two-turn chapter.",
       min=2, max=50, step=1),
