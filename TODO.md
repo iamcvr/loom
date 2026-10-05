@@ -237,12 +237,49 @@ already resident, so this costs no extra memory and no extra download.
 ### What already exists
 
 `images.py` runs a single background worker draining a queue, entirely off the turn
-loop (20-40s a render, never in the critical path). Portraits are cached per
-character name forever. `portrait_prompt()` / `set_portrait_prompt()` let a player
-describe a character the story does not define. `_render()` already takes a seed and
-a checkpoint. Rendering happens on atlas's 4070 via `LOOM_COMFY_URL`, which is the
-right split: that card beats Strix Halo at SDXL, and it keeps image generation out
-of the LLM's memory entirely.
+loop (20-40s a render on a 4070, never in the critical path). Portraits are cached
+per character name forever. `portrait_prompt()` / `set_portrait_prompt()` let a
+player describe a character the story does not define. `_render()` already takes a
+seed and a checkpoint.
+
+### Everything must run on one machine
+
+The author's own deployment renders on a second box's RTX 4070 over the network.
+**That is not the shipped architecture and must not be designed around.** A released
+loom runs on whatever single machine the user has, so image generation shares a GPU
+with the language model.
+
+Consequences, none of them fatal but all of them real:
+
+- **The GPU is contended.** A render and a turn want the same device. The queue is
+  already off the critical path, which helps, but a render during generation will
+  slow both. Renders probably want to pause while a turn is streaming.
+- **`IMG_MAX_CONCURRENT = 1` is justified by a comment reading "the 4070 has 12GB".**
+  That assumption no longer holds and the number needs rederiving per machine.
+- **The 20-40s figure is a 4070 number.** An iGPU with no tensor cores and a third
+  the bandwidth will be slower, which multiplies through a 28-image expression set.
+
+### The image backend is a packaging decision, not a detail
+
+Two paths, and this choice matters more for shipping than anything else here:
+
+**ComfyUI** — what loom speaks today. Rich: arbitrary graphs, IP-Adapter, ControlNet,
+LoRA, which is exactly what the identity problem below needs. But it is **not
+packaged** on Arch (git clone plus a venv, since PEP 668 blocks pip), carries a large
+PyTorch dependency tree, and **`python-pytorch-rocm` supporting gfx1151 is
+unverified**. That last point is a hard prerequisite nobody has tested.
+
+**stable-diffusion.cpp** — same ggml lineage as llama.cpp, a single binary, no Python
+at all. `aur/stable-diffusion.cpp-vulkan-git` is actively maintained and most-voted,
+and the Vulkan backend is **already proven on this hardware** (see MEASUREMENTS.md:
+RADV STRIX_HALO, within 7% of ROCm for LLM inference). Note the ROCm variant,
+`-hipblas-git`, is orphaned and a year out of date — Vulkan is the live path. Far
+narrower features though: identity preservation would mean PhotoMaker rather than
+IP-Adapter, and **whether it supports either needs checking before committing.**
+
+Cheapest next step is to verify the backends rather than argue: does PyTorch-ROCm
+see gfx1151 at all, and can stable-diffusion.cpp-vulkan hold a face across a dozen
+renders. Both are small experiments and they decide the whole feature's shape.
 
 ### The blocker: character identity, not image count
 
@@ -255,11 +292,23 @@ not look like the same person.** Fixed seed plus a varied expression phrase drif
 on hair, face shape and clothing, and a cast whose faces change between lines sells
 the opposite of "lived in".
 
-The fix matches the flow already described: the player picks one option, and **that
-image becomes the identity anchor** — fed back as an IP-Adapter reference for the
-expression set. That needs the workflow to stop being one hardcoded graph, which is
-already a listed known gap in the README. **It is the critical path for this whole
-feature** and should be done first, on its own, with one character as the test.
+The fix matches the flow already described, and is backend-independent: the player
+picks one option, and **that image becomes the identity anchor** — fed back as a
+reference when rendering the expression set, so the expressions are derived from the
+chosen face rather than re-rolled from the same words.
+
+*How* that reference is applied is where the backend choice bites. On ComfyUI it is
+IP-Adapter, which means the workflow must stop being one hardcoded graph — already a
+listed known gap in the README. On stable-diffusion.cpp it would be PhotoMaker or
+img2img against the chosen image, and whether either holds a face well enough is
+unverified.
+
+**This is the critical path for the whole feature.** Prove one character's
+expression set holds its identity before building any selection UI on top of it. If
+no available backend can hold a face across a dozen renders, the feature needs a
+different shape — perhaps far fewer expressions, or inpainting only the face region
+of one fixed base image — and it is much cheaper to learn that now than after the
+setup flow is built.
 
 ### The flow
 
