@@ -170,6 +170,27 @@ AXES: list[dict] = [
        "manufacture it between cast members to give a scene shape."),
      ]},
 
+    {"key": "explicitness", "question": "How far does the camera follow them?",
+     "help": "Only reached if intimacy happens at all. Independent of whether there "
+             "is romance — a story can have none of one and plenty of the other.",
+     "options": [
+      ("fade", "Fade at the door",
+       "FADE AT THE DOOR. Attraction, tension and wanting are written fully; what "
+       "follows is not. Cut on a closing door, a hand on a wrist, a light going off, "
+       "and pick up afterwards. The anticipation is the scene."),
+      ("suggested", "On the page, but not graphic",
+       "INTIMACY IS WRITTEN, NOT CATALOGUED. Scenes of physical intimacy happen on "
+       "the page rather than being skipped, but they are written for breath, weight "
+       "and closeness rather than anatomy. Sensual rather than graphic. Stay with "
+       "what it feels like and stop short of explicit detail."),
+      ("explicit", "Explicit",
+       "EXPLICIT IS ALLOWED. When the story arrives at sex, write it plainly and in "
+       "full rather than cutting away or retreating into euphemism. It is still "
+       "prose: pacing, character and consequence matter as much here as anywhere, "
+       "and the scene is still about the specific people in it rather than the "
+       "mechanics. Everyone involved is an adult and has chosen to be there."),
+     ]},
+
     {"key": "mystery", "question": "Is there a mystery to solve?",
      "help": "Models reach for conspiracies unprompted. This is how you stop that.",
      "options": [
@@ -290,6 +311,14 @@ def build(choices: dict) -> str:
     nobody can account for, and an absent instruction leaves the model its own
     judgement, which is better than a wrong one asserted confidently.
     """
+    choices = dict(choices)
+    # Enforced here rather than trusted to the fragment's own wording. The axes are
+    # independent by design, so nothing else stops "teenagers" and "explicit" being
+    # selected together; a rule this absolute does not belong in prose a user can
+    # edit, or in a UI that a direct API call bypasses.
+    if choices.get("cast_age") == "teens" and choices.get("explicitness") == "explicit":
+        choices["explicitness"] = "fade"
+
     out: list[str] = []
     for axis in AXES:
         pick = choices.get(axis["key"])
