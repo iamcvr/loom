@@ -322,11 +322,43 @@ ComfyUI's requires the workflow to stop being one hardcoded graph (already a lis
 known gap), and stable-diffusion.cpp exposes `--ip-adapter` with `--clip_vision`, plus
 img2img against the chosen image.
 
-**Prove this first, with one character, before any selection UI exists.** It is a
-ten-minute experiment on the existing checkpoint: fix a seed, fix a tag block, fix
-the framing, vary only the expression, and look at twelve of them. The answer
-decides the backend, the packaging and the shape of the setup flow, and it is far
-cheaper to learn now than afterwards.
+**RESOLVED 2026-10-05 — the cheap approach works.** Two twelve-image sets on
+`waiIllustriousSDXL_v170`, fixed seed 42, fixed tag block, fixed framing, only the
+expression term varying, 768x1024 at 24 steps.
+
+Identity holds without any face-embedding mechanism. Across twelve renders the face,
+hair colour, hairstyle, eye colour and art style are consistently the same character.
+**No IP-Adapter, no PhotoMaker, no reference image, no anchor plumbing.** The identity
+anchor really is just the seed plus the tag block, as predicted.
+
+What drifts is **sporadic and per-frame, not systematic**, and that is the finding
+that shapes the feature:
+
+- outfit detail drifts in proportion to how much detail there is to drift. A
+  decorated military coat changed its insignia in all twelve frames; a plain gym
+  shirt with red trim held across all twelve. **Simple outfits are a real mitigation.**
+- one frame in twelve tied the hair up; two or three carried a shirt logo the others
+  lacked; one zoomed in and added manga emphasis lines.
+
+**So the fix is a review-and-reroll step, not a better pipeline.** Show the player the
+contact sheet, let them click the two or three frames that came out wrong, re-roll
+those with a bumped seed. At 49 s a render that is about 100 seconds to repair a
+28-image set. Everything img2img anchoring would have bought is achieved by
+regenerating the handful of outliers, and it needs no new backend capability.
+
+Judged by the author, who called the result "almost perfect" and the core concept
+"sound".
+
+**The remaining constraint is time, not quality.** 49 s a render means 23 minutes for
+a 28-expression set and 1.5 hours for a party of four. See MEASUREMENTS.md for the
+ranked levers; a quantised GGUF checkpoint is the one to try first.
+
+**One shipping hazard found by accident.** The first character block — "black
+high-collared military coat" with white hair — produced unmistakable SS iconography in
+all twelve frames, because anime checkpoints carry strong unintended priors on certain
+tag combinations. A setup flow that accepts free-text character descriptions *will*
+hit these. `military, uniform, insignia, medal, armband` are now in the test's negative
+prompt and something like that belongs in the shipped default.
 
 ### The flow
 
