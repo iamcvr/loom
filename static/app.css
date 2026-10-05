@@ -685,6 +685,24 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
 .ledFact .k { font-size: 10px; text-transform: uppercase; opacity: .55;
   letter-spacing: .05em; padding-top: 2px; }
 
+/* The settings advisor. Proposals only — applying goes through the same pending
+   queue as a hand edit, so a proposed knob highlights as changed and the ordinary
+   Save button commits it. */
+.setAdvise { padding: 10px 14px 0; }
+.setAdvise .adviseRow { display: flex; gap: 8px; }
+.setAdvise input { flex: 1; min-width: 0; }
+.adviseCard { margin-top: 10px; padding: 10px 12px; border: 1px solid currentColor;
+  border-radius: 6px; opacity: .92; }
+.adviseCard h4 { margin: 0 0 6px; font-size: .78rem; letter-spacing: .05em;
+  text-transform: uppercase; opacity: .6; }
+.adviseCard .diff { font-variant-numeric: tabular-nums; }
+.adviseCard .why { opacity: .75; }
+/* The knob's own documentation, beside the model's claim about it. The model has
+   been measured getting the direction of a knob backwards, so the two are shown
+   together rather than the claim alone. */
+.adviseCard .docs { opacity: .55; font-style: italic; }
+.adviseCard .dead { opacity: .6; text-decoration: line-through; }
+
 /* Destructive, so it should not look like Duplicate. */
 button.danger { color: #c0562a; }
 @media (prefers-color-scheme: dark) { button.danger { color: #e0865a; } }

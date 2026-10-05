@@ -1425,6 +1425,78 @@ function closeSettings() {
 const knobValue = (k) => (k.key in SET.pending ? SET.pending[k.key] : k.value);
 const sameValue = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
+/* ---------------------------------------------------------------- advisor */
+
+async function askAdvisor() {
+  const q = $('adviseInput').value.trim();
+  if (!q) return;
+  $('adviseGo').disabled = true;
+  $('adviseOut').innerHTML = '';
+  $('adviseOut').append(el('div', 'adviseCard muted', 'thinking…'));
+  try {
+    const d = await api('/api/advise', { request: q, session: S.id || 0 });
+    renderAdvice(d);
+  } catch (e) {
+    $('adviseOut').innerHTML = '';
+    $('adviseOut').append(el('div', 'adviseCard bad', e.message));
+  }
+  $('adviseGo').disabled = false;
+}
+
+function renderAdvice(d) {
+  const out = $('adviseOut');
+  out.innerHTML = '';
+
+  if (d.findings && d.findings.length) {
+    const c = el('div', 'adviseCard');
+    c.append(el('h4', '', 'What it found'));
+    d.findings.forEach((f) => c.append(el('div', 'small', f)));
+    out.append(c);
+  }
+
+  if (d.changes && d.changes.length) {
+    const c = el('div', 'adviseCard');
+    c.append(el('h4', '', 'Proposed'));
+    d.changes.forEach((ch) => {
+      c.append(el('div', 'diff small',
+        `${ch.label} (${ch.key}): ${JSON.stringify(ch.from)} \u2192 ${JSON.stringify(ch.to)}`));
+      if (ch.why) c.append(el('div', 'why small', ch.why));
+      // Shown together on purpose: the model has been measured stating the
+      // direction of a knob backwards, and the documentation is how you catch it.
+      if (ch.help) c.append(el('div', 'docs small', 'docs: ' + ch.help));
+    });
+    const btn = el('button', 'primary', `Stage ${d.changes.length} change${d.changes.length > 1 ? 's' : ''}`);
+    btn.onclick = () => {
+      d.changes.forEach((ch) => stageKnob(ch.key, ch.to));
+      $('setStatus').textContent = 'staged — review the highlighted knobs, then Save';
+    };
+    c.append(btn);
+    out.append(c);
+  }
+
+  if (d.ineffective && d.ineffective.length) {
+    const c = el('div', 'adviseCard');
+    c.append(el('h4', '', 'Proposed, but it would not help'));
+    d.ineffective.forEach((ch) => {
+      c.append(el('div', 'diff small dead',
+        `${ch.label}: ${JSON.stringify(ch.from)} \u2192 ${JSON.stringify(ch.to)}`));
+      c.append(el('div', 'why small', ch.reason));
+    });
+    out.append(c);
+  }
+
+  if (d.rejected && d.rejected.length) {
+    const c = el('div', 'adviseCard');
+    c.append(el('h4', '', 'Discarded as invalid'));
+    d.rejected.forEach((r) => c.append(el('div', 'small dead', `${r.key}: ${r.reason}`)));
+    out.append(c);
+  }
+
+  if (!out.children.length) {
+    out.append(el('div', 'adviseCard muted', 'Nothing to change — current settings already do that.'));
+  }
+}
+
 function stageKnob(key, value) {
   const k = SET.data.knobs.find((x) => x.key === key);
   if (sameValue(value, k.value)) delete SET.pending[key];
@@ -2554,6 +2626,8 @@ $('setBack').onclick = async () => {
   closeSettings();
 };
 $('setSave').onclick = saveSettings;
+$('adviseGo').onclick = askAdvisor;
+$('adviseInput').onkeydown = (e) => { if (e.key === 'Enter') askAdvisor(); };
 $('edBack').onclick = async () => {
   if (ED.dirty && !await ask('Discard unsaved changes to this story?', 'Discard')) return;
   closeEditor();
