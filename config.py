@@ -42,32 +42,58 @@ BUDGET_TOTAL = 48_000
 # every estimate derived from it understated what the prompt actually costs.
 CHARS_PER_TOKEN = 3.15
 
+# Fraction of the usable window the arbiter is allowed to fill. CHARS_PER_TOKEN is
+# an average and dialogue-heavy turns run worse than it, so spending the window to
+# the last token would truncate on exactly the turns that matter most.
+BUDGET_SAFETY = 0.95
+
+# NOTE: BUDGET_TOTAL above is a fallback. It is DERIVED from the context window at
+# startup and on every settings save — see settings.derive_budget(). The window is
+# the single knob; the character budget follows from it.
+
 # Order matters. This list IS the priority order.
 BUDGET_LAYERS = [
-    # name              floor   ceiling   notes
-    ("director_notes",  0,      2_000),   # never trimmed; usually tiny or empty
-    ("rules",           1_500,  11_000),  # story custom prompt
-    # High priority, and it has a floor. The Ledger is what carries the world
-    # once the transcript starts getting trimmed, so it must outrank the thing
-    # that is pushing it out. Renders at DEPTH rather than in the system block
-    # (see ledger.py) but is budgeted here like director_notes.
+    # Three tiers, and they have different growth profiles. Sized from that.
+    #
+    #   CONCRETE      written once, never grows. The world, the cast, the
+    #                 protagonist, the shape of the arc. Small and fixed.
+    #   INTERMEDIATE  the story's accumulated state — who stands where with whom,
+    #                 what has happened, which goals closed. Grows over a campaign
+    #                 and is kept bounded by compaction and memory decay, not by
+    #                 being starved. This is the tier that carries continuity.
+    #   TRANSCRIPT    raw recent prose. Takes whatever is left, and is ALSO the
+    #                 input the utility model reads to update the intermediate
+    #                 tier — so starving it degrades the intermediate tier too,
+    #                 and the symptom looks like a stupid model rather than a bad
+    #                 budget.
+    #
+    # name              floor   ceiling
+    # ---- per-turn direction: tiny, and volatile by nature
+    ("director_notes",  0,      2_000),
+    # ---- CONCRETE
+    ("rules",           1_500,  8_000),   # the world, the concept, the cast
+    # ---- INTERMEDIATE (high priority: it outranks the transcript that displaces it)
     ("ledger",          500,    6_000),   # facts you approved; see ledger.py
     # 2,000 was a guess and it was wrong: a real player wrote a 2,500-character
     # power and the whole block was dropped from every single turn.
-    ("protagonist",     800,    4_500),   # who the player chose to be
-    # Narrative-mode stories declare an arc; the harness decides which act is
-    # current and this layer carries that act's shape and nothing else. High
-    # priority and a small floor because it is the only thing in the prompt that
-    # knows a story can be over — dropping it means the story wanders forever.
-    ("arc",             400,    2_500),   # the current act, for stories with one
-    ("chapters",        800,    6_500),   # synopsis + recent chapter summaries
-    ("nudge",           300,    1_600),   # pacing prompts: the open goal, the next fight
-    ("state",           300,    2_500),   # stats + relationships, structured
-    ("goals",           0,      1_000),   # the active goal, plus the backlog
-    ("long_memory",     0,      5_000),   # embedding-retrieved durable facts
-    ("keyword_notes",   0,      12_000),  # story lore + the session lorebook
-    ("temp_memory",     0,      6_000),   # heat-sorted recent salience
-    ("transcript",      8_000,  24_000),  # recent messages; gets the slack
+    ("protagonist",     800,    3_000),   # CONCRETE: who the player chose to be
+    ("arc",             400,    1_500),   # CONCRETE: the current act's shape
+    # The hinge between the tiers. As the transcript scrolls off, this is what
+    # catches it — so it has to be able to hold a campaign, not a scene. 4,000
+    # could not, which is what made long stories feel amnesiac.
+    ("chapters",        1_500,  14_000),  # synopsis + recent chapter summaries
+    ("nudge",           0,      1_600),   # per-turn pacing prompt, volatile
+    # Where "they are in love" becomes "it is complicated". Upserted by name, so
+    # it is current state rather than history.
+    ("state",           400,    4_000),   # relationships + stats, structured
+    ("goals",           0,      1_500),
+    ("long_memory",     500,    5_000),   # embedding-retrieved durable facts
+    ("keyword_notes",   0,      4_000),   # story lore + the session lorebook
+    ("temp_memory",     0,      2_500),   # heat-sorted recent salience
+    # ---- TRANSCRIPT: the slack absorber. Its ceiling is deliberately larger than
+    # any sane budget so that spare space becomes verbatim story rather than going
+    # unspent. See TODO.md — it wants to be formally unbounded.
+    ("transcript",      8_000,  60_000),
 ]
 
 # ---------------------------------------------------------------- memory

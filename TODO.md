@@ -32,23 +32,32 @@ than a character count.
 
 ### 4. Priority order is not cache order
 
-llama-server (and ollama) reuse the KV cache on an **unchanged prefix**. The
-arbiter re-allocates every layer each turn, and the volatile layers — `ledger`,
-`chapters`, `state`, `temp_memory` — sit *early*, ahead of the transcript. When
-any of them changes, everything after it re-prefills.
+Backends reuse the KV cache on an **unchanged prefix**, and the three tiers have
+exactly the right shape for that — but the layer order does not reflect them:
 
-The `ledger` already renders at DEPTH rather than in the system block, so the
-mechanism for separating priority from position exists. Worth measuring the real
-cache hit rate across turns before changing anything.
+```
+CONCRETE      never changes      -> should be FIRST  (cached every turn)
+INTERMEDIATE  changes on update  -> middle
+DIRECTION     changes every turn -> late
+TRANSCRIPT    appends every turn -> LAST
+```
 
-### 5. Re-evaluate `BUDGET_TOTAL`
+Today `director_notes` is first and `nudge` sits mid-table, both of which change
+every turn — so they invalidate everything after them on every single turn, which
+is the worst possible position for the two most volatile layers.
 
-It is 22,000 characters only because `num_ctx` is 8192. ollama already holds
-Cydonia at **ctx=32768**, so raising `num_ctx` lifts the ceiling to roughly
-99,000 characters. Do that first, measure, then choose a number deliberately —
-the current value is a constraint artefact, not a decision.
+The tension is real, not an oversight: **the list is the priority order**, meaning
+it decides what survives trimming, and `ledger` deliberately outranks the
+transcript that would displace it. Reordering for the cache would reorder what
+gets dropped under pressure.
 
----
+`ledger` already shows the way out — it is budgeted at its priority but *rendered*
+at DEPTH, i.e. at the end of the prompt. So priority and position can be separated
+per layer. The work is to do that deliberately for the volatile layers rather than
+once by accident.
+
+Measure first: the actual cache hit rate across consecutive turns. Nobody has
+looked, and caching is on by default in llama-server, so the baseline is unknown.
 
 ## Anytime
 
@@ -134,3 +143,26 @@ deployment-specific and belongs in compose.
 
 Verified by running with no `LOOM_*_URL` set at all — prose and embeddings both
 work out of the box, which is what §8 depends on.
+
+### 5. ~~Re-evaluate `BUDGET_TOTAL`~~ — 2026-10-05
+
+Became a bigger change than re-picking a number. `BUDGET_TOTAL` is no longer a
+knob at all: the **context window is the single knob** and the character budget is
+derived from it (`settings.derive_budget`). Three numbers that had to be kept in
+agreement by hand are now one that cannot disagree with itself.
+
+`brain.model_limits()` asks ollama what the model actually is, so the window has a
+visible price (`layers x kv_heads x (key+value) x 2` bytes a token — exact, not a
+guess) and a checkable ceiling (`trained_ctx`).
+
+`BUDGET_LAYERS` was also re-sized by tier rather than by feel — concrete 12,500 /
+intermediate 37,000 / transcript 60,000 — after the realisation that **the
+transcript is the input the utility model reads to update the intermediate tier**,
+so starving it degrades both and the symptom looks like a stupid model.
+
+Live result: window 8,192 -> 32,768, budget 20,923 -> 94,467 characters,
+transcript ~5 exchanges -> ~26, `chapters` 4,000 -> 14,000, KV cache 5.00 GiB.
+
+Retired knobs are now migrated rather than reported as "unknown" — `RETIRED` in
+settings.py drops them from storage once with the reason, which matters for anyone
+upgrading across the frontier strip.

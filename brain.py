@@ -411,6 +411,66 @@ def models_list(provider: str, *, force: bool = False) -> dict:
     return out
 
 
+LIMITS_TTL = 300.0
+_limits_cache: dict[str, tuple[float, dict]] = {}
+
+
+def _mi(info: dict, suffix: str) -> Optional[int]:
+    """Pull an architecture value out of ollama's model_info.
+
+    Keys are prefixed by model family — `llama.block_count`, `gemma3.block_count`
+    — so match on the suffix rather than hardcoding an architecture.
+    """
+    for key, value in info.items():
+        if key.endswith(suffix) and isinstance(value, int):
+            return value
+    return None
+
+
+def model_limits(model: str, *, provider: str = "ollama", force: bool = False) -> dict:
+    """What the model itself says about its context window, and what it costs.
+
+    Returns {"trained_ctx", "kv_bytes_per_token", "layers", "kv_heads", "error"}.
+    An error with zeros is a normal result — no ollama, a model not pulled — and
+    callers must treat it as "cannot verify", never as "this model is unusable".
+
+    KV cache is exact arithmetic, not a guess: every token held in the window
+    costs layers x kv_heads x (key_len + value_len) x 2 bytes, so a window has a
+    memory price that can be shown before it is paid for.
+    """
+    import time
+    out: dict[str, Any] = {"model": model, "trained_ctx": 0, "kv_bytes_per_token": 0,
+                           "layers": 0, "kv_heads": 0, "error": None}
+    if provider != "ollama" or not model:
+        # Only ollama exposes this. An openai_compat server owns its own window
+        # and does not volunteer the architecture behind it.
+        out["error"] = "only available for the ollama provider"
+        return out
+
+    hit = _limits_cache.get(model)
+    if hit and not force and time.time() - hit[0] < LIMITS_TTL:
+        return hit[1]
+
+    try:
+        data = _post(config.OLLAMA_URL.rstrip("/") + "/api/show", {"model": model},
+                     {"content-type": "application/json"}, timeout=EMBED_TIMEOUT)
+        info = data.get("model_info") or {}
+        layers = _mi(info, ".block_count") or 0
+        kv_heads = _mi(info, ".attention.head_count_kv") or 0
+        k_len = _mi(info, ".attention.key_length") or 0
+        v_len = _mi(info, ".attention.value_length") or 0
+        out["trained_ctx"] = _mi(info, ".context_length") or 0
+        out["layers"] = layers
+        out["kv_heads"] = kv_heads
+        # fp16 KV cache: 2 bytes an element.
+        out["kv_bytes_per_token"] = layers * kv_heads * (k_len + v_len) * 2
+    except (BrainError, KeyError, ValueError, TypeError) as e:
+        out["error"] = str(e)
+
+    _limits_cache[model] = (time.time(), out)
+    return out
+
+
 def probe(provider: str, model: str, *, timeout: int = 25) -> dict:
     """Send the smallest possible real request and report what came back.
 

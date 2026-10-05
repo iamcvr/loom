@@ -36,6 +36,21 @@ _lock = threading.Lock()
 _defaults: dict[str, Any] = {}
 
 
+# Knobs that used to exist. A stored settings.json carrying one of these is
+# migrated — the key is dropped and the reason reported — rather than called
+# "unknown", because "unknown setting" reads like a typo when the setting was in
+# fact deliberately removed.
+RETIRED = {
+    "BUDGET_TOTAL": "now derived from the context window; set PROSE.num_ctx instead",
+    "PROSE.thinking": "removed with the frontier providers",
+    "PROSE_FALLBACK.url": "the refusal-fallback tier was removed",
+    "PROSE_FALLBACK.provider": "the refusal-fallback tier was removed",
+    "PROSE_FALLBACK.model": "the refusal-fallback tier was removed",
+    "PROSE_FALLBACK.max_tokens": "the refusal-fallback tier was removed",
+    "PROSE_FALLBACK_ON_REFUSAL": "the refusal-fallback tier was removed",
+}
+
+
 def _path() -> Any:
     return config.STATE_DIR / "settings.json"
 
@@ -50,14 +65,19 @@ def K(key, type_, group, label, help_="", **kw) -> dict:
 # `key` may be dotted to reach into a config dict, e.g. "PROSE.model".
 KNOBS: list[dict] = [
     # ---- context budget
-    K("BUDGET_TOTAL", "int", "Context budget", "Total budget",
-      "Characters of prompt, across every layer. Measured against the tokenizer on a "
-      "real dialogue-heavy turn it is 3.15 characters per token, not the 3.6 this "
-      "used to claim — so 48,000 is about 15k tokens, and any estimate from the old "
-      "figure ran ~14% light. This is the cost dial, and it is the only one that "
-      "bounds what you pay per turn directly. For scale: Opus 5's window is 1M "
-      "tokens, so 48,000 characters is 1.5% of it.",
-      min=4_000, max=400_000, step=1_000),
+    #
+    # ONE knob. The character budget, and therefore every layer's share of it, is
+    # derived from this window — see derive_budget(). Three numbers that had to be
+    # kept in agreement by hand are now one that cannot disagree with itself.
+    K("PROSE.num_ctx", "int", "Context budget", "Context window (tokens)",
+      "The whole window, covering prompt AND reply. Everything else follows from "
+      "it: the reply ceiling is reserved out of it and the remainder becomes the "
+      "character budget the arbiter spends. On ollama loom sends this value, so it "
+      "IS the window — changing it makes ollama reload the model, which costs about "
+      "30 seconds on the next turn. On openai_compat loom cannot set the window, so "
+      "declare what your server was started with and budgeting stays honest. Every "
+      "token is KV cache in memory; the settings panel shows what the window costs.",
+      min=2048, max=131072, step=1024),
     K("BUDGET_LAYERS", "layers", "Context budget", "Layer floors and ceilings",
       "Priority order, top to bottom — the arbiter fills each layer in turn. A layer "
       "always gets its floor; it grows toward its ceiling only if budget remains. "
@@ -137,12 +157,6 @@ KNOBS: list[dict] = [
     K("PROSE.repeat_penalty", "float", "Models", "Prose repeat penalty (local only)",
       "1.0 is off. Above ~1.15 it starts eating ordinary English — 'the' is a "
       "repeated token too.", min=1.0, max=1.5, step=0.01),
-    K("PROSE.num_ctx", "int", "Models", "Prose context window (ollama only)",
-      "Tokens ollama loads the model with, covering prompt AND reply. Past it the "
-      "prompt is silently truncated from the front, which reads as the story losing "
-      "its memory. Keep it above (total budget / 3) + max tokens. Every token is "
-      "KV cache in VRAM: ~160KB each on a 12B, so 8192 is about 1.3GB.",
-      min=2048, max=131072, step=1024),
     K("PROSE_RETRIES", "int", "Models", "Retries on provider failure",
       "How many times to retry a turn when the provider is overloaded, rate-limited "
       "or returns nothing. Backoff doubles each attempt (2s, 4s, 8s, 16s). Retries "
@@ -391,7 +405,12 @@ def apply_saved() -> list[str]:
     with _lock:
         _snapshot_defaults()
         problems: list[str] = []
-        for key, value in _load_file().items():
+        stored = _load_file()
+        retired = [k for k in stored if k in RETIRED]
+        for key, value in stored.items():
+            if key in RETIRED:
+                problems.append(f"retired setting '{key}' dropped — {RETIRED[key]}")
+                continue
             knob = _BY_KEY.get(key)
             if not knob:
                 problems.append(f"unknown setting '{key}' ignored")
@@ -400,8 +419,17 @@ def apply_saved() -> list[str]:
                 _write(key, _coerce(knob, value))
             except ValueError as e:
                 problems.append(str(e))
-        if msg := _headroom_problem(context_headroom()):
+        # Written back once so the complaint is not repeated on every boot.
+        if retired:
+            for key in retired:
+                stored.pop(key, None)
+            _save_file(stored)
+
+        # The budget is derived, so it is computed after the knobs land.
+        derive_budget()
+        if msg := _plan_problem(context_plan()):
             problems.append(msg)
+        problems.extend(_report_warnings(context_report()))
         return problems
 
 
@@ -440,69 +468,99 @@ def check_models() -> list[str]:
     return warnings
 
 
-def context_headroom(pending: Optional[dict] = None) -> dict:
-    """Does the character budget still fit the model's token window?
+def derive_budget() -> int:
+    """Set config.BUDGET_TOTAL from the context window. The window is the knob.
 
-    ollama does not error when a prompt exceeds the context it loaded the model
-    with — it drops the front, so the story reads as having lost its memory and
-    the model takes the blame. The budget is counted in characters and the window
-    in tokens, so the two drift apart silently. This is the arithmetic that ties
-    them together; see MEASUREMENTS.md.
+    One number instead of three. The window covers prompt and reply together: the
+    reply ceiling is reserved out of it, and what remains — less a safety margin,
+    because CHARS_PER_TOKEN is an average — becomes the character budget the
+    arbiter has to spend.
 
-    `pending` overlays values that have been validated but not yet written, so a
-    save raising `num_ctx` and `BUDGET_TOTAL` together is judged on its result
-    rather than on a half-applied state.
+    Deriving it is what makes ollama's silent front-truncation *structurally*
+    impossible rather than merely warned about: there is no second number left to
+    disagree with the first.
+    """
+    plan = context_plan()
+    if plan["window"] > 0:
+        config.BUDGET_TOTAL = plan["budget"]
+    return config.BUDGET_TOTAL
+
+
+def context_plan(pending: Optional[dict] = None) -> dict:
+    """The context arithmetic. Pure — no network, safe to call during validation.
+
+    `pending` overlays validated-but-unwritten values so a save is judged on its
+    result rather than on a half-applied state.
     """
     pending = pending or {}
 
     def val(key, current):
         return pending.get(key, current)
 
-    provider = val("PROSE.provider", config.PROSE.get("provider"))
     window = int(val("PROSE.num_ctx", config.PROSE.get("num_ctx") or 0))
-    budget = int(val("BUDGET_TOTAL", config.BUDGET_TOTAL))
     reply = int(val("PROSE.max_tokens", config.PROSE.get("max_tokens") or 0))
-    prompt_tokens = math.ceil(budget / config.CHARS_PER_TOKEN)
-    needed = prompt_tokens + reply
+    layers = val("BUDGET_LAYERS", config.BUDGET_LAYERS)
+    floors = sum(int(row[1]) for row in layers)
+
+    usable = max(0, window - reply)
+    budget = int(usable * config.CHARS_PER_TOKEN * config.BUDGET_SAFETY)
     return {
-        # num_ctx is only ever sent by the ollama provider. An openai_compat
-        # server owns its own window and does not volunteer what it is, so there
-        # is nothing to check against there — see TODO.md.
-        "applies": provider == "ollama" and window > 0,
-        "prompt_tokens": prompt_tokens,
-        "reply_tokens": reply,
-        "needed": needed,
+        "provider": val("PROSE.provider", config.PROSE.get("provider")),
+        "model": val("PROSE.model", config.PROSE.get("model")),
         "window": window,
-        "headroom": window - needed,
-        "fits": needed <= window,
+        "reply_tokens": reply,
+        "usable_tokens": usable,
+        "budget": budget,
+        "floors": floors,
+        # The only way the derivation can fail: a window too small to seat the
+        # layer minimums. Everything else fits by construction.
+        "floors_fit": budget >= floors,
     }
 
 
-def _headroom_problem(h: dict) -> Optional[str]:
-    """The sentence to show when the budget and the window disagree, or None."""
-    if not h["applies"]:
+def _plan_problem(plan: dict) -> Optional[str]:
+    """The blocking complaint about a plan, or None. Pure."""
+    if plan["window"] <= 0 or plan["floors_fit"]:
         return None
-    if not h["fits"]:
-        return (
-            f"context overflow: the prompt needs {h['needed']} tokens "
-            f"({h['prompt_tokens']} budget + {h['reply_tokens']} reply) but "
-            f"PROSE.num_ctx is {h['window']}. ollama would silently drop the front "
-            f"of every prompt, which reads as the story losing its memory. Raise "
-            f"num_ctx to at least {h['needed']}, or lower BUDGET_TOTAL to "
-            f"{int((h['window'] - h['reply_tokens']) * config.CHARS_PER_TOKEN)} "
-            f"characters."
+    reply = plan["reply_tokens"]
+    needed = int(plan["floors"] / (config.CHARS_PER_TOKEN * config.BUDGET_SAFETY)) + reply
+    return (
+        f"context window too small: {plan['window']} tokens leaves "
+        f"{plan['budget']} characters of budget after reserving {reply} for the "
+        f"reply, but the layer floors need {plan['floors']}. Raise the window to "
+        f"at least {needed} tokens, lower the reply ceiling, or lower the floors "
+        f"in BUDGET_LAYERS."
+    )
+
+
+def context_report(pending: Optional[dict] = None) -> dict:
+    """context_plan() plus what the model says about itself. Hits ollama (cached)."""
+    import brain
+    plan = context_plan(pending)
+    limits = brain.model_limits(plan["model"], provider=plan["provider"])
+    per_token = limits.get("kv_bytes_per_token") or 0
+    trained = limits.get("trained_ctx") or 0
+    return {
+        **plan,
+        "kv_bytes_per_token": per_token,
+        "kv_bytes": per_token * plan["window"],
+        "trained_ctx": trained,
+        # None when unknown — "cannot verify" is not "does not fit".
+        "within_trained": None if not trained else plan["window"] <= trained,
+        "limits_error": limits.get("error"),
+    }
+
+
+def _report_warnings(report: dict) -> list[str]:
+    """Advisory complaints — reported, never blocking."""
+    out: list[str] = []
+    if report["within_trained"] is False:
+        out.append(
+            f"context window {report['window']} exceeds what "
+            f"{report['model']} was trained for ({report['trained_ctx']}). "
+            f"Quality degrades past the trained length even when the model loads."
         )
-    # Exactly fitting is not safe: 3.15 chars/token is an average and
-    # dialogue-heavy turns run worse, so a thin margin truncates eventually and
-    # silently. Warned, never blocked — it is a real configuration.
-    if h["window"] and h["headroom"] / h["window"] < 0.10:
-        return (
-            f"thin context margin: only {h['headroom']} tokens spare against "
-            f"PROSE.num_ctx {h['window']}. The chars-per-token ratio is an "
-            f"average; a dialogue-heavy turn will cross it and truncate without "
-            f"an error. Raise num_ctx."
-        )
-    return None
+    return out
 
 
 def update(changes: dict) -> dict:
@@ -532,12 +590,12 @@ def update(changes: dict) -> dict:
         # describing one constraint, so the whole change is judged together —
         # raising the window and the budget in a single save is legal, raising
         # only the budget past the window is not.
-        h = context_headroom(coerced)
-        if h["applies"] and not h["fits"]:
-            raise ValueError(_headroom_problem(h))
+        if msg := _plan_problem(context_plan(coerced)):
+            raise ValueError(msg)
 
         for key, value in coerced.items():
             _write(key, value)
+        derive_budget()
 
         overrides = _load_file()
         for key, value in coerced.items():
@@ -592,5 +650,5 @@ def current() -> dict:
         "path": str(_path()),
         "floors_total": total,
         "floors_fit": total <= config.BUDGET_TOTAL,
-        "context": context_headroom(),
+        "context": context_report(),
     }
