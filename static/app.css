@@ -692,22 +692,32 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
 .advisor.collapsed .advisePanel { display: none; }
 .advisor:not(.collapsed) .adviseBubble { display: none; }
 .adviseBubble { width: 40px; height: 40px; border-radius: 50%; font-size: 1.05rem;
-  line-height: 1; cursor: pointer; opacity: .75; }
-.adviseBubble:hover { opacity: 1; }
+  line-height: 1; cursor: pointer; opacity: .8;
+  background: var(--bg2); color: var(--fg); border: 1px solid var(--line); }
+.adviseBubble:hover { opacity: 1; border-color: var(--accent); }
+/* Opaque, because it floats over the story text. Inputs inherit `color` from the
+   global rule at the top of this file and get no background of their own, so
+   every one of them has to set its own — see .composer textarea. */
 .advisePanel { width: min(27rem, calc(100vw - 28px)); display: flex;
   flex-direction: column; gap: 8px; padding: 10px;
-  border: 1px solid currentColor; border-radius: 8px; }
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .45); }
 .adviseHead { display: flex; align-items: center; justify-content: space-between;
   font-size: .78rem; letter-spacing: .05em; text-transform: uppercase; opacity: .6; }
 /* The log is kept until the panel is closed or the page reloads — a proposal is
    worth re-reading after you have looked at the knob it names. */
 .adviseLog { max-height: min(26rem, 55vh); overflow-y: auto; }
 .adviseRow { display: flex; gap: 8px; }
-.adviseRow input { flex: 1; min-width: 0; }
+.adviseRow input { flex: 1; min-width: 0; padding: 8px 10px;
+  background: var(--bg2); color: var(--fg);
+  border: 1px solid var(--line); border-radius: var(--radius); }
+.adviseRow input::placeholder { color: var(--muted); }
+.adviseRow input:focus { outline: none; border-color: var(--accent); }
 .adviseAsk { font-size: .78rem; letter-spacing: .05em; text-transform: uppercase;
   opacity: .5; margin-top: 10px; }
-.adviseCard { margin-top: 10px; padding: 10px 12px; border: 1px solid currentColor;
-  border-radius: 6px; opacity: .92; }
+.adviseCard { margin-top: 10px; padding: 10px 12px; background: var(--bg2);
+  border: 1px solid var(--line); border-radius: var(--radius); }
 .adviseCard h4 { margin: 0 0 6px; font-size: .78rem; letter-spacing: .05em;
   text-transform: uppercase; opacity: .6; }
 .adviseCard .diff { font-variant-numeric: tabular-nums; }
