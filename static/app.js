@@ -1427,31 +1427,55 @@ const sameValue = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 /* ---------------------------------------------------------------- advisor */
 
+/* Floats over every screen rather than living in the settings panel: the question
+   "why is the prose like this" occurs while reading, not while already looking at
+   fifty-five knobs. The log is kept until the panel is closed or the page reloads,
+   because a proposal is worth re-reading after you have gone and looked at the
+   knob it names. Closing clears it; there is no persistence worth the confusion. */
+
+function openAdvisor() {
+  $('advisor').classList.remove('collapsed');
+  $('adviseInput').focus();
+}
+
+function closeAdvisor() {
+  $('advisor').classList.add('collapsed');
+  $('adviseOut').innerHTML = '';
+}
+
 async function askAdvisor() {
   const q = $('adviseInput').value.trim();
   if (!q) return;
+  $('adviseInput').value = '';
   $('adviseGo').disabled = true;
-  $('adviseOut').innerHTML = '';
-  $('adviseOut').append(el('div', 'adviseCard muted', 'thinking…'));
+
+  const out = $('adviseOut');
+  out.append(el('div', 'adviseAsk', q));
+  const pending = el('div', 'adviseCard muted', 'thinking\u2026');
+  out.append(pending);
+  out.scrollTop = out.scrollHeight;
+
   try {
     const d = await api('/api/advise', { request: q, session: S.id || 0 });
+    pending.remove();
     renderAdvice(d);
   } catch (e) {
-    $('adviseOut').innerHTML = '';
-    $('adviseOut').append(el('div', 'adviseCard bad', e.message));
+    pending.remove();
+    out.append(el('div', 'adviseCard bad', e.message));
   }
   $('adviseGo').disabled = false;
+  out.scrollTop = out.scrollHeight;
 }
 
 function renderAdvice(d) {
   const out = $('adviseOut');
-  out.innerHTML = '';
+  let any = false;
 
   if (d.findings && d.findings.length) {
     const c = el('div', 'adviseCard');
     c.append(el('h4', '', 'What it found'));
     d.findings.forEach((f) => c.append(el('div', 'small', f)));
-    out.append(c);
+    out.append(c); any = true;
   }
 
   if (d.changes && d.changes.length) {
@@ -1465,13 +1489,21 @@ function renderAdvice(d) {
       // direction of a knob backwards, and the documentation is how you catch it.
       if (ch.help) c.append(el('div', 'docs small', 'docs: ' + ch.help));
     });
-    const btn = el('button', 'primary', `Stage ${d.changes.length} change${d.changes.length > 1 ? 's' : ''}`);
-    btn.onclick = () => {
+    const btn = el('button', 'primary',
+      `Stage ${d.changes.length} change${d.changes.length > 1 ? 's' : ''}`);
+    btn.onclick = async () => {
+      // Staging needs the settings schema loaded, and openSettings() clears the
+      // pending queue — so it has to happen first, not after.
+      if ($('settings').classList.contains('hidden')) {
+        await openSettings(S.id ? 'app' : 'boot');
+      }
       d.changes.forEach((ch) => stageKnob(ch.key, ch.to));
-      $('setStatus').textContent = 'staged — review the highlighted knobs, then Save';
+      $('setStatus').textContent = 'staged \u2014 review the highlighted knobs, then Save';
+      btn.disabled = true;
+      btn.textContent = 'staged';
     };
     c.append(btn);
-    out.append(c);
+    out.append(c); any = true;
   }
 
   if (d.ineffective && d.ineffective.length) {
@@ -1482,18 +1514,19 @@ function renderAdvice(d) {
         `${ch.label}: ${JSON.stringify(ch.from)} \u2192 ${JSON.stringify(ch.to)}`));
       c.append(el('div', 'why small', ch.reason));
     });
-    out.append(c);
+    out.append(c); any = true;
   }
 
   if (d.rejected && d.rejected.length) {
     const c = el('div', 'adviseCard');
     c.append(el('h4', '', 'Discarded as invalid'));
     d.rejected.forEach((r) => c.append(el('div', 'small dead', `${r.key}: ${r.reason}`)));
-    out.append(c);
+    out.append(c); any = true;
   }
 
-  if (!out.children.length) {
-    out.append(el('div', 'adviseCard muted', 'Nothing to change — current settings already do that.'));
+  if (!any) {
+    out.append(el('div', 'adviseCard muted',
+      'Nothing to change \u2014 the current settings already do that.'));
   }
 }
 
@@ -2628,6 +2661,8 @@ $('setBack').onclick = async () => {
 $('setSave').onclick = saveSettings;
 $('adviseGo').onclick = askAdvisor;
 $('adviseInput').onkeydown = (e) => { if (e.key === 'Enter') askAdvisor(); };
+$('adviseBubble').onclick = openAdvisor;
+$('adviseClose').onclick = closeAdvisor;
 $('edBack').onclick = async () => {
   if (ED.dirty && !await ask('Discard unsaved changes to this story?', 'Discard')) return;
   closeEditor();

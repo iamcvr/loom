@@ -29,14 +29,6 @@
     <button id="setReset" class="ghost">Reset all</button>
     <button id="setSave" class="primary" disabled>Save</button>
   </header>
-  <div id="setAdvise" class="setAdvise">
-    <div class="adviseRow">
-      <input id="adviseInput" type="text" autocomplete="off"
-             placeholder="Describe what you want changed — &ldquo;more creative prose&rdquo;, &ldquo;longer replies&rdquo;">
-      <button id="adviseGo" class="ghost">Ask</button>
-    </div>
-    <div id="adviseOut"></div>
-  </div>
   <div class="setMain">
     <nav id="setNav" class="setNav"></nav>
     <div id="setBody" class="setBody"></div>
@@ -248,6 +240,24 @@
   <pre id="promptText"></pre>
   <button onclick="document.getElementById('promptDlg').close()">Close</button>
 </dialog>
+
+<!-- Floats over every screen: a question about settings is usually asked while
+     reading, not while already in the settings panel. -->
+<div id="advisor" class="advisor collapsed">
+  <button id="adviseBubble" class="adviseBubble" title="Ask about settings">&#9881;&#65039;</button>
+  <div class="advisePanel">
+    <div class="adviseHead">
+      <span>Settings advisor</span>
+      <button id="adviseClose" class="ghost" title="Close and clear">&times;</button>
+    </div>
+    <div id="adviseOut" class="adviseLog"></div>
+    <div class="adviseRow">
+      <input id="adviseInput" type="text" autocomplete="off"
+             placeholder="&ldquo;more creative prose&rdquo;, &ldquo;longer replies&rdquo;&hellip;">
+      <button id="adviseGo" class="ghost">Ask</button>
+    </div>
+  </div>
+</div>
 
 <script src="/static/app.js"></script>
 </body>

@@ -688,9 +688,24 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
 /* The settings advisor. Proposals only — applying goes through the same pending
    queue as a hand edit, so a proposed knob highlights as changed and the ordinary
    Save button commits it. */
-.setAdvise { padding: 10px 14px 0; }
-.setAdvise .adviseRow { display: flex; gap: 8px; }
-.setAdvise input { flex: 1; min-width: 0; }
+.advisor { position: fixed; left: 14px; bottom: 14px; z-index: 60; }
+.advisor.collapsed .advisePanel { display: none; }
+.advisor:not(.collapsed) .adviseBubble { display: none; }
+.adviseBubble { width: 40px; height: 40px; border-radius: 50%; font-size: 1.05rem;
+  line-height: 1; cursor: pointer; opacity: .75; }
+.adviseBubble:hover { opacity: 1; }
+.advisePanel { width: min(27rem, calc(100vw - 28px)); display: flex;
+  flex-direction: column; gap: 8px; padding: 10px;
+  border: 1px solid currentColor; border-radius: 8px; }
+.adviseHead { display: flex; align-items: center; justify-content: space-between;
+  font-size: .78rem; letter-spacing: .05em; text-transform: uppercase; opacity: .6; }
+/* The log is kept until the panel is closed or the page reloads — a proposal is
+   worth re-reading after you have looked at the knob it names. */
+.adviseLog { max-height: min(26rem, 55vh); overflow-y: auto; }
+.adviseRow { display: flex; gap: 8px; }
+.adviseRow input { flex: 1; min-width: 0; }
+.adviseAsk { font-size: .78rem; letter-spacing: .05em; text-transform: uppercase;
+  opacity: .5; margin-top: 10px; }
 .adviseCard { margin-top: 10px; padding: 10px 12px; border: 1px solid currentColor;
   border-radius: 6px; opacity: .92; }
 .adviseCard h4 { margin: 0 0 6px; font-size: .78rem; letter-spacing: .05em;
