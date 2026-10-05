@@ -395,3 +395,32 @@ Quality notes from the A/B sheets:
   not answerable from three frames. If a 28-set at 16 steps needs noticeably more
   rerolls than at 24, that erases the saving. Worth measuring before 16 becomes the
   shipped default; 20-24 steps is the conservative choice until then.
+
+### The chosen config, and what the speed table got wrong (2026-10-05)
+
+**Decision: q4_K at 24 steps, no `--diffusion-fa`.** 43 s a render, 20 minutes for a
+28-expression set, 80 minutes for a party of four. Chosen by the author after viewing
+all four configs at native resolution.
+
+The table above is still correct about *time* and was badly wrong about *quality*. Both
+speed levers it recommended cost image quality:
+
+- **`--diffusion-fa` renders flat.** Compared side by side against the same seed without
+  it, the flash-attention output loses depth and dimensionality. The 37% it saves is not
+  free, which retires it as a default.
+- **16 steps produces anatomical failure.** The laughing frame came out with missing
+  fingers. An earlier revision of this file asserted 16 steps showed "no degradation in
+  faces, hands or linework" — hands are exactly where it broke.
+
+**So the honest speed story is 49 s -> 43 s, a 12% gain from quantisation alone**, not
+the 49 s -> 19.4 s the stacked configs implied. Sprite rendering is roughly 20 minutes a
+character and that is the number to plan against.
+
+**The process failure is worth more than the result.** Three times in one session a
+quality judgement was made from contact-sheet tiles downscaled 3.4x from the originals,
+and all three were wrong — logo crispness, background banding, and now flatness and
+hands. The method note above was written after the first two and then not followed.
+
+Quality is judged at native resolution, by the person whose product it is. Measured
+numbers — timings, file sizes, render counts — are the useful contribution here.
+Verdicts on how images look are not.
