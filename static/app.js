@@ -2185,26 +2185,11 @@ function secStory(d) {
   }));
   out.push(field('Tagline', txt(d, 'tagline', 'One line, shown on the story card.')));
 
-  // Mode is structural, not a preference: it decides which subsystems run at
-  // all. Without this control a story could only ever be 'play', and raw was
-  // reachable only by hand-editing the yaml.
-  const modeSel = document.createElement('select');
-  // Only `play` is offered. `raw` and `narrative` still parse and still run --
-  // story.py validates all three -- but neither was developed past a sketch,
-  // and shipping three half-modes is worse than shipping one finished one.
-  [['play', 'Play - you are a character in it'],
-  ].forEach(([v, label]) => {
-    const o = document.createElement('option');
-    o.value = v; o.textContent = label;
-    if ((d.mode || 'play') === v) o.selected = true;
-    modeSel.append(o);
-  });
-  modeSel.onchange = () => { d.mode = modeSel.value; touch(); };
-  out.push(field('Mode', modeSel, {
-    hint: 'Raw runs the story on its rules, the Ledger and the transcript alone '
-        + '- the other subsystems do not execute, so a global setting cannot '
-        + 'switch them back on underneath it. Its panels are hidden during play.',
-  }));
+  // No mode control. `play` is the only developed mode and is now the default;
+  // `raw` and `narrative` still parse and still run, because story.py validates
+  // all three and an old story file must not break, but neither was finished and
+  // offering a choice between one real option and two sketches helps nobody.
+  d.mode = d.mode || 'play';
 
   out.push(field('Rules', area(d, 'rules', 12,
     'How the story is narrated. Tense, person, tone, pacing, what the narrator ' +

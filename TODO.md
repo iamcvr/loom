@@ -514,3 +514,74 @@ story restating. Build it once and the memory simplification comes nearly free.
   something a reader would miss?
 - Changing memory architecture against existing stories risks regressions that only
   show up in prose quality, which is the hardest thing here to measure.
+
+## v1.4 — help the user write the rules
+
+The premise, from the author: *"the average user is probably going to be very, very
+simplistic in what they denote for the world, the rules, the characters."* Seiran's
+rules are 5,207 characters of specific, opinionated craft and they are why it reads
+well. Nobody arriving at loom for the first time writes that. They write "a fantasy
+world with dragons" and get something flat, and they will blame the model.
+
+### Seiran decomposes into a questionnaire
+
+Every block in it answers one design question. That list IS the interview:
+
+| the block | the question |
+|---|---|
+| TONE: modern hero-school anime, warm, loud, funny | what emotional register? |
+| EVERYONE IS AN ADULT | who is the cast? |
+| A FIGHT IS ONE PERSON SOLVING IT | how does action work? |
+| QUIRKS HIT HARD | how powerful is everyone? |
+| THE CAST IS THE POINT | is this about people or plot? |
+| ROMANCE: real, slow, the player's to steer | romance, and who drives it? |
+| SHONEN, NOT SHERLOCK | mystery and deduction, or not? |
+| DO NOT CONNECT THINGS | is there an overarching pattern? |
+| WHAT A SESSION IS MADE OF | the content mix, in order of how much room each gets |
+| VILLAINS ARE INDIVIDUALS | what scale are the antagonists? |
+| FAILURE IS REAL, one floor only | what are the stakes, and what is protected? |
+
+Eleven axes. Ask those eleven questions and you have specified a story's rules.
+
+### What makes this work or fail
+
+**Emit prose, not flags.** The value is not in knowing the user wants no mystery, it
+is in the paragraph *"DO NOT CONNECT THINGS... If you notice yourself arranging details
+into a pattern, throw the pattern away."* A toggle that emits "no conspiracies" is worth
+a fraction of that. Each option has to map to writing as specific as Seiran's, which
+means **someone has to author the fragments well.** That is the real cost here and it is
+writing work, not engineering work.
+
+**Generate into the rules field, visibly.** The output is editable text the user can
+read, learn from and change. Never a hidden config behind the toggles — if it is a
+black box they cannot fix what they dislike and they learn nothing about why their
+story reads the way it does.
+
+**The highest-value question is the one nobody would think to ask.** WHAT A SESSION IS
+MADE OF — ordinary life as the baseline, violence frequent but brief, romance underneath
+both — is what makes Seiran feel like a life instead of a highlight reel. A new author
+will not specify a content ratio unprompted. Asking is the whole point of asking.
+
+### Two routes to the same place
+
+The questionnaire suits people who want to be guided. For people who can already
+describe what they want, **v1.1's settings advisor is the same shape** — natural
+language in, a validated proposal out, shown as a diff before it applies. "A grim
+detective story in 1970s Chicago, no supernatural, the player can die" should produce a
+proposed ruleset the same way "more creative prose" produces proposed settings. The
+machinery exists; it needs a second prompt and a different target field.
+
+### Templates
+
+Named, importable rulesets, with Seiran's as the first one. Start from a template,
+answer the questions to adjust it, edit the prose directly, and export your own.
+`CORE_RULES` is already the universal half; this is the per-story half.
+
+### Risks
+
+- **Generic fragments produce generic stories.** If the authored prose is bland the
+  questionnaire actively harms — it gives users confidence in a weak ruleset. Better to
+  ship five excellent options per axis than twenty mediocre ones.
+- **Scope.** This is the story-creation experience, which also carries v1.2's character
+  sprites and v1.3's format directive. Creation is becoming loom's main product surface
+  and should probably be designed once, as a whole, rather than three times.
