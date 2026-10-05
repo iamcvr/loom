@@ -773,3 +773,88 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button {
   -webkit-appearance: none; appearance: none; margin: 0; }
+
+/* ---------------------------------------------------------------- phones
+   Everything above is desktop-first and the 860px block only moves the side
+   panel out of the way. At phone width the real problems are different: a
+   190px settings nav eating half the screen, fixed-width inputs overflowing,
+   dialogs sized as a percentage of a viewport that is already tiny, and tap
+   targets built for a mouse. */
+@media (max-width: 620px) {
+
+  /* 15px serif at arm's length on a phone is a squint. */
+  body { font-size: 16px; }
+  .small, .knob .help, .muted.small { font-size: 13px; line-height: 1.5; }
+
+  /* Fingers, not cursors. 5px of padding is a 22px target; 44px is the
+     accessibility floor and 38 is the least that is honest. */
+  button, .setNav button, .rbOpt { min-height: 38px; }
+  button.ghost { padding: 8px 12px; }
+
+  .bar { gap: 8px; padding: 9px 10px; flex-wrap: wrap; }
+  .bar strong { font-size: 15px; }
+
+  /* The settings nav stops being a sidebar and becomes a scroller. 190px of a
+     390px screen left the knobs in a 200px gutter. */
+  .setMain { flex-direction: column; }
+  .setNav {
+    width: auto; display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden;
+    border-right: 0; border-bottom: 1px solid var(--line); padding: 8px 10px;
+    scrollbar-width: none;
+  }
+  .setNav::-webkit-scrollbar { display: none; }
+  .setNav button {
+    width: auto; white-space: nowrap; border-left: 0; border-radius: 999px;
+    border: 1px solid var(--line); padding: 6px 12px;
+  }
+  .setBody { padding: 16px 14px 90px; }
+  .setGroup { max-width: none; }
+
+  /* Fixed widths written for a 640px column. */
+  .knob input[type=text], .knob select, .knob textarea,
+  .modelPick select, .modelPick input[type=text] { width: 100%; }
+  .knobTop { flex-wrap: wrap; gap: 8px; }
+  .layerTable input { width: 64px; }
+  .layerTable { overflow-x: auto; }
+
+  /* A dialog at 92vw with 18px padding is a letterbox. Full-bleed is the only
+     honest answer on a phone, and dvh rather than vh so the browser chrome
+     collapsing does not crop the footer. */
+  /* :not(.askDlg) because a yes/no confirmation taking the whole screen reads as
+     an error page rather than a question. */
+  .dlg:not(.askDlg) {
+    width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh;
+    border-radius: 0; border: 0; padding: 0; margin: 0;
+    display: flex; flex-direction: column;
+  }
+  .askDlg { width: calc(100vw - 28px); }
+  /* The cast portrait was a fixed 240px column beside the text. */
+  .castMedia { width: 100%; }
+  .dlg > header, .dlg > footer { padding: 12px 14px; flex-shrink: 0; }
+  .dlg > footer { flex-wrap: wrap; gap: 8px; }
+  .chapBody, .loreBody, .castBody, .rulesBody { padding: 12px 14px; }
+  .dlg pre { max-height: none; }
+
+  .rulesBody { grid-template-columns: 1fr; overflow-y: auto; }
+  .rulesPrev { max-height: 45vh; }
+  .rbOpt { flex: 1 1 auto; }
+
+  /* The cast list and detail stack rather than share 390px. */
+  .castBody { flex-direction: column; }
+  .castList { width: auto; max-height: 30vh; }
+
+  /* The advisor bubble sits where a thumb is, not under the composer. */
+  .advisor { left: 10px; bottom: 10px; }
+  .advisePanel { width: calc(100vw - 20px); }
+  .adviseLog { max-height: 50vh; }
+
+  .composer { padding: 10px 12px; gap: 8px; }
+  .composer button { padding: 0 16px; }
+  .messages { padding: 14px 12px 6px; }
+}
+
+/* Very narrow, or large text. The two-up footer buttons wrap into a stack. */
+@media (max-width: 400px) {
+  .dlg > footer button { flex: 1 1 100%; }
+  .bar .ghost { padding: 7px 9px; }
+}
