@@ -900,7 +900,11 @@ input[type=number]::-webkit-outer-spin-button {
      collapsing does not crop the footer. */
   /* :not(.askDlg) because a yes/no confirmation taking the whole screen reads as
      an error page rather than a question. */
-  .dlg:not(.askDlg) {
+  /* [open] matters enormously. A closed <dialog> is display:none from the UA
+     stylesheet, so setting display:flex unconditionally overrode that and left
+     EVERY dialog permanently on the page -- which is why "Assembled prompt" was
+     sitting under the story on a phone. */
+  .dlg:not(.askDlg)[open] {
     width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh;
     border-radius: 0; border: 0; padding: 0; margin: 0;
     display: flex; flex-direction: column;
