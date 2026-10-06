@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prompt review tool for the model sweep. http://atlas:8101
+"""Prompt review tool for the model sweep.
 
 Nothing runs until it is approved here, and approval is bound to the exact text:
 change a character and that scene drops back to unapproved.
@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from prompt import build, fingerprint
 
 STATE = os.environ.get("BENCH_STATE",
-                       os.path.expanduser("~/docker/config/loom/state/scenes.json"))
+                       os.path.join(os.path.dirname(__file__), "scenes.json"))
 PORT = int(os.environ.get("BENCH_PORT", "8101"))
 
 

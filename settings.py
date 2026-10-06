@@ -243,7 +243,7 @@ KNOBS: list[dict] = [
     K("LEDGER_ENABLED", "bool", "Ledger", "Use the ledger",
       "Facts you have approved, injected into every turn just before generation. "
       "Separate from Memory and the Lorebook on purpose: nothing here reaches the "
-      "model until you accept it. Reviewed at http://atlas:8100/ledger"),
+      "model until you accept it. Reviewed in the Ledger panel."),
     K("LEDGER_TRIGGER_FILL", "float", "Ledger", "Propose facts at fill",
       "When the context budget reaches this fraction, the turn finishes and then "
       "offers you facts to keep. Fires early on purpose - past the model's window "

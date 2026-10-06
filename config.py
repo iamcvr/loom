@@ -266,7 +266,7 @@ UTILITY = {
 # Optional third tier: the desktop's KoboldCpp. Set url to enable.
 LOCAL = {
     "provider": "openai_compat",
-    "url": os.environ.get("LOOM_LOCAL_URL", ""),   # e.g. http://192.168.5.234:5001/v1
+    "url": os.environ.get("LOOM_LOCAL_URL", ""),   # e.g. http://127.0.0.1:5001/v1
     "model": "local",
     "max_tokens": 1200,
     "temperature": 1.0,

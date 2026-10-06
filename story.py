@@ -633,9 +633,9 @@ def sessions_using(story_id: str) -> list[dict]:
 def delete(story_id: str) -> dict:
     """Archive the story directory, then remove it.
 
-    Never an unrecoverable rm. ~/Projects/CLAUDE.md requires destructive work to
-    leave a tarball behind, and the archive goes under STATE_DIR because that is
-    the only host-visible path the container can write to.
+    Never an unrecoverable rm: destructive work leaves a tarball behind. The archive
+    goes under STATE_DIR because that is the only host-visible path a containerised
+    deployment can write to.
 
     Sessions are deliberately NOT deleted. A session holds its own transcript and
     is the thing with hours in it; the story file is a few kilobytes of setup.
