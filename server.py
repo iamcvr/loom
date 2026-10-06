@@ -573,6 +573,12 @@ class Handler(BaseHTTPRequestHandler):
                 if was and was["name"] and was["name"] != pro["name"]:
                     store.rename_media_subject(sid, was["name"], pro["name"])
                 images.set_portrait_prompt(sid, pro["name"], pro.get("prompt", ""))
+                # A portrait drawn while editing. Same claim as on session create,
+                # so re-rolling your own face mid-story lands the same way it does
+                # when you first sit down.
+                pick = str(body.get("portrait_pick") or "")
+                if pick and pro.get("name"):
+                    images.claim_candidate(sid, pick, pro["name"], pro.get("prompt", ""))
                 self._json({"ok": True, **session_state(sid)})
 
             elif path == "/api/send":

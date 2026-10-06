@@ -753,29 +753,6 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
 .castShotName { font-weight: 600; }
 .castShotBtns { display: flex; gap: 6px; flex-wrap: wrap; }
 
-/* Portrait options during character creation. */
-.pcShotRow { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
-.pcShotStatus { flex: 1; min-width: 0; }
-.pcShots { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 8px; margin-top: 10px; }
-.pcShot { position: relative; }
-.pcShots img {
-  width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: var(--radius);
-  border: 2px solid var(--line); cursor: pointer; background: var(--bg3);
-  display: block;
-}
-.pcShot:hover img { border-color: var(--muted); }
-.pcShot.on img { border-color: var(--accent); }
-/* Sits on the image, so picking and inspecting are different gestures rather than
-   one gesture that has to guess which was meant. */
-.pcZoom {
-  position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; padding: 0;
-  border-radius: 6px; cursor: zoom-in; line-height: 1; font-size: 13px;
-  background: rgba(20, 22, 26, .78); color: var(--fg);
-  border: 1px solid var(--line);
-}
-.pcZoom:hover { border-color: var(--accent); }
-
 .advisor { position: fixed; left: 14px; bottom: 14px; z-index: 60; }
 .advisor.collapsed .advisePanel { display: none; }
 .advisor:not(.collapsed) .adviseBubble { display: none; }

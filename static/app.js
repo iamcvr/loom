@@ -199,42 +199,36 @@ async function start(storyId) {
 
 const PC = { mode: null, storyId: null, defaults: null };
 
-async function pollCandidates(token, shots, status, gen) {
-  let d;
-  try { d = await api('/api/candidates?token=' + encodeURIComponent(token)); }
-  catch { return; }
-  if (PC.token !== token) { clearInterval(PC.poll); return; }
-
-  d.images.forEach((name) => {
-    if (shots.querySelector(`[data-name="${name}"]`)) return;
-    // Click picks. Seeing it properly needs its own control, because a 130px tile
-    // is enough to tell that a face rendered and not enough to decide you want it.
-    const cell = el('div', 'pcShot');
-    cell.dataset.name = name;
-    const img = el('img');
-    img.src = '/media/' + name;
-    img.alt = 'portrait option';
-    img.onclick = () => {
-      PC.pick = PC.pick === name ? null : name;
-      shots.querySelectorAll('.pcShot').forEach(
-        (x) => x.classList.toggle('on', x.dataset.name === PC.pick));
-    };
-    const zoom = el('button', 'pcZoom', '\u2922');
-    zoom.title = 'See it full size';
-    zoom.onclick = (e) => { e.stopPropagation(); lightbox('/media/' + name, 'Option'); };
-    cell.append(img, zoom);
-    shots.append(cell);
-  });
-
-  const left = d.total - d.done;
-  status.textContent = d.error ? d.error
-    : d.done >= d.total
-      ? `${d.done} options \u2014 click one to use it`
-      : `${d.done} of ${d.total} \u00b7 ${d.elapsed}s \u00b7 about 45s each, ${left} to go`;
-  if (d.done >= d.total || d.error) {
+/* One portrait for the player's character. During creation there is no session yet,
+   so the file stays a candidate and is claimed when the session is created; in edit
+   mode it attaches immediately. */
+async function drawPcPortrait(promptField, slot, status, btn) {
+  const prompt = (promptField.value || '').trim();
+  if (!prompt) { status.textContent = 'describe an appearance first'; return; }
+  btn.disabled = true;
+  status.textContent = 'queued\u2026';
+  try {
+    const { token } = await api('/api/candidates', { prompt, n: 1 });
+    PC.token = token;
     clearInterval(PC.poll);
-    gen.disabled = false;
-  }
+    await new Promise((resolve) => {
+      PC.poll = setInterval(async () => {
+        let d;
+        try { d = await api('/api/candidates?token=' + encodeURIComponent(token)); }
+        catch { return; }
+        if (PC.token !== token) { clearInterval(PC.poll); resolve(); return; }
+        if (d.error) { clearInterval(PC.poll); status.textContent = d.error; resolve(); return; }
+        if (!d.done) { status.textContent = `drawing\u2026 ${d.elapsed}s`; return; }
+        clearInterval(PC.poll);
+        PC.pick = d.images[0];
+        setCastShot(slot, '/media/' + PC.pick, 'portrait');
+        status.textContent = 'click it to see it full size';
+        btn.textContent = 'Re-roll';
+        resolve();
+      }, 3000);
+    });
+  } catch (e) { status.textContent = e.message; }
+  btn.disabled = false;
 }
 
 function pcField(body, label, help, value, opts = {}) {
@@ -319,31 +313,31 @@ function openPC({ storyId = null, defaults = null } = {}) {
      moment someone is deciding who they are. Options arrive one at a time rather
      than all at the end -- each is its own render, so the first face is on screen
      in about 45 seconds instead of everything appearing after three minutes. */
+  /* Last thing in the sheet, because it is the last thing you decide: the face
+     follows from everything written above it. One portrait, re-rolled until it is
+     right -- the same shape the cast uses, rather than a grid of four to choose
+     between. Choosing between four strangers is a harder question than looking at
+     one and saying no. */
   PC.pick = null;
   clearInterval(PC.poll);
-  const shots = el('div', 'pcShots');
-  const shotStatus = el('div', 'pcShotStatus muted small');
-  const gen = el('button', 'ghost', 'Generate portraits');
-  gen.onclick = async () => {
-    const prompt = f.prompt.value.trim();
-    if (!prompt) { shotStatus.textContent = 'describe an appearance first'; return; }
-    gen.disabled = true;
-    shots.innerHTML = '';
-    PC.pick = null;
-    shotStatus.textContent = 'queued\u2026';
-    try {
-      const { token } = await api('/api/candidates', { prompt, n: 4 });
-      PC.token = token;
-      clearInterval(PC.poll);
-      PC.poll = setInterval(() => pollCandidates(token, shots, shotStatus, gen), 3000);
-    } catch (e) {
-      shotStatus.textContent = e.message;
-      gen.disabled = false;
-    }
-  };
-  const shotRow = el('div', 'pcShotRow');
-  shotRow.append(gen, shotStatus);
-  body.append(shotRow, shots);
+  const shotSlot = el('div', 'castShotImg');
+  const shotStatus = el('div', 'muted small', 'none yet');
+  const gen = el('button', 'ghost', 'Draw a portrait');
+  gen.onclick = () => drawPcPortrait(f.prompt, shotSlot, shotStatus, gen);
+  const shotBtns = el('div', 'castShotBtns');
+  shotBtns.append(gen);
+  const shotMeta = el('div', 'castShotMeta');
+  shotMeta.append(shotStatus, shotBtns);
+  const shotRow = el('div', 'castShotRow');
+  shotRow.append(shotSlot, shotMeta);
+  body.append(el('h4', null, 'Portrait'), shotRow);
+
+  // In edit mode the session already has one; show it rather than an empty box.
+  if (editing) {
+    const have = portraitFor(cur.name || '');
+    if (have) { setCastShot(shotSlot, have + '?t=' + Date.now(), cur.name || ''); 
+                shotStatus.textContent = 'current portrait'; gen.textContent = 'Re-roll'; }
+  }
 
   // Live size against the layer's allowance. A character sheet that overruns is
   // not an error anywhere — the arbiter simply trims the tail — so without this
@@ -381,7 +375,8 @@ function openPC({ storyId = null, defaults = null } = {}) {
     $('pcStatus').textContent = editing ? 'saving…' : 'starting…';
     try {
       if (editing) {
-        render(await api('/api/protagonist', { session: S.id, values }));
+        render(await api('/api/protagonist',
+          { session: S.id, values, portrait_pick: PC.pick || '' }));
         refreshContext();
       } else {
         const st = await api('/api/session',
