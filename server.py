@@ -467,6 +467,35 @@ class Handler(BaseHTTPRequestHandler):
                     "in_use": {"prose": config.PROSE["model"] if config.PROSE["provider"] == prov else None,
                                "utility": config.UTILITY["model"] if config.UTILITY["provider"] == prov else None},
                 })
+            elif path == "/api/setup":
+                # Everything the first-run screen needs, in one call. It runs
+                # before anything works, so each part degrades on its own rather
+                # than the whole thing failing because one service is down.
+                prov = config.PROSE["provider"]
+                listing = brain.models_list(prov)
+                names = listing.get("models", [])
+                self._json({
+                    "configured": bool(config.PROSE["model"]),
+                    "provider": prov,
+                    "ollama_url": config.OLLAMA_URL,
+                    "image_url": config.IMAGE_URL,
+                    "models": names,
+                    "error": listing.get("error"),
+                    # Long-term memory silently degrades to recency ordering
+                    # without this, which is the kind of fault nobody traces back
+                    # to a missing model.
+                    "embed_model": config.EMBED_MODEL,
+                    # models_list() files anything matching "embed" under `hidden`,
+                    # so the embedding model is never in `models` and checking only
+                    # that list always reported it missing.
+                    "embed_present": any(
+                        m.split(":")[0] == config.EMBED_MODEL.split(":")[0]
+                        for m in names + listing.get("hidden", [])),
+                    "images_reachable": images.reachable(),
+                    "prose": config.PROSE["model"],
+                    "utility": config.UTILITY["model"],
+                    "num_ctx": config.PROSE["num_ctx"],
+                })
             elif path == "/api/models":
                 self._json(brain.models(qs.get("provider", ["ollama"])[0],
                                         force=qs.get("force") == ["1"]))

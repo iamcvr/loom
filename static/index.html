@@ -20,6 +20,24 @@
   <div id="bootHealth" class="muted small"></div>
 </div>
 
+<div id="setup" class="screen hidden">
+  <header class="bar">
+    <div class="title"><strong>Set loom up</strong></div>
+    <div class="grow"></div>
+    <span id="setupStatus" class="muted small"></span>
+  </header>
+  <div class="setupBody">
+    <p class="lede">Nothing is configured yet. loom needs a model to narrate with;
+    everything else here is optional and can be changed later in Settings.</p>
+    <div id="setupRows"></div>
+    <footer class="setupFoot">
+      <button id="setupSkip" class="ghost">Skip for now</button>
+      <div class="grow"></div>
+      <button id="setupGo" class="primary" disabled>Start writing</button>
+    </footer>
+  </div>
+</div>
+
 <div id="settings" class="screen hidden">
   <header class="bar">
     <button id="setBack" class="ghost" title="Back">&#8592;</button>

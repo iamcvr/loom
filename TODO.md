@@ -17,7 +17,7 @@ changing shape underneath them.
 
 ## What is left
 
-Two items.
+One item.
 
 ### 1. Mobile
 
@@ -61,36 +61,29 @@ last one, because the orphan was still in the file — only a depth walk catches
 cannot find a screen that is merely unpleasant — spacing, reachability, whether a
 dialog's footer clears the keyboard, whether the composer is usable one-handed.
 
-### 2. First-install setup guide
-
-**There is no path from `git clone` to a working loom.** `PROSE.model` and
-`UTILITY.model` default to `""` on purpose — no model name is right for every host
-— so a fresh clone starts with nothing configured and nothing telling the user
-what to do about it.
-
-Needs to cover, in order:
-
-- prerequisites: ollama running, and at least one chat model pulled
-- how to pick a prose model, and what size is realistic for their hardware
-- the embedding model (`nomic-embed-text`) — long-term memory degrades to recency
-  ordering without it
-- the utility model, and that pointing it at the **same** model as prose avoids
-  ollama swapping a multi-GB model in and out between lanes
-- `PROSE.num_ctx`, which is the single knob the whole character budget derives from
-- `LOOM_OLLAMA_URL` / `LOOM_EMBED_URL` / `LOOM_IMAGE_URL` / `LOOM_STATE` /
-  `LOOM_STORIES`, and `PYTHONUNBUFFERED=1` for a systemd unit
-- images are optional, and what you lose without them
-
-Open question worth deciding first: should first run **prompt** rather than
-document? An unconfigured loom fails at the first turn with a provider error, which
-is a poor first impression. A setup screen listing what ollama actually holds would
-beat any README section.
-
 ---
 
 ## Done
 
 The numbering below is historical — these were §§1-9 when they were open.
+
+### ~~First run asks instead of failing~~ — 2026-10-06
+
+An unconfigured loom used to fail at the first turn with a provider error, which
+tells a new user nothing about what to do. It now opens a setup screen instead,
+shown only when `PROSE.model` is empty and skippable: which model should narrate,
+which should do the structured work, and whether the two optional services are
+there.
+
+Building it found two bugs that a README section never would have.
+`images.reachable()` still called ComfyUI's `/system_stats` through a `_get()`
+helper deleted when the module moved to `/sdapi/v1` — it raised NameError, the bare
+except swallowed it, and images reported unreachable no matter what was running. And
+the embedding check looked only at `models_list()["models"]`, which files anything
+matching "embed" under `hidden`, so `nomic-embed-text` always read as missing.
+
+Verified against a real fresh install on a second port: configured false with empty
+models, the save accepted, configured true after.
 
 ### ~~Repo hygiene~~ — 2026-10-06
 

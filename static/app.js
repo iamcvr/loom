@@ -105,6 +105,108 @@ function updateLatestButton() {
 
 /* ------------------------------------------------------------------ boot */
 
+/* First run. An unconfigured loom used to fail at the first turn with a provider
+   error, which tells you nothing about what to do. This asks instead: which model
+   should narrate, which should do the structured work, and is the embedding model
+   there -- the one whose absence silently degrades long-term memory to recency
+   ordering, which nobody ever traces back to a missing model.
+
+   It only appears when PROSE.model is empty, and it can be skipped. */
+
+async function maybeSetup() {
+  let d;
+  try { d = await api('/api/setup'); } catch { return false; }
+  if (d.configured) return false;
+
+  const rows = $('setupRows');
+  rows.innerHTML = '';
+  const pick = { prose: '', utility: '', num_ctx: d.num_ctx };
+
+  const row = (title, note, control) => {
+    const r = el('div', 'setupRow');
+    r.append(el('div', 'setupName', title));
+    if (note) r.append(el('div', 'muted small', note));
+    if (control) r.append(control);
+    rows.append(r);
+    return r;
+  };
+
+  // 1. the model server
+  const ok = !d.error && d.models.length;
+  row(ok ? 'Model server' : 'Model server not answering',
+      ok ? `${d.ollama_url} — ${d.models.length} model${d.models.length > 1 ? 's' : ''} available`
+         : `${d.ollama_url} — ${d.error || 'no models found'}. Start ollama and pull a `
+           + 'chat model, then reload this page.')
+    .classList.add(ok ? 'good' : 'bad');
+
+  if (ok) {
+    // 2. prose
+    const ps = el('select');
+    ps.append(Object.assign(document.createElement('option'),
+      { value: '', textContent: 'Choose a model\u2026' }));
+    d.models.forEach((m) => ps.append(
+      Object.assign(document.createElement('option'), { value: m, textContent: m })));
+    const us = el('select');
+    d.models.forEach((m) => us.append(
+      Object.assign(document.createElement('option'), { value: m, textContent: m })));
+    ps.onchange = () => {
+      pick.prose = ps.value;
+      // Same model by default: pointing the two lanes at different models makes
+      // ollama swap a multi-GB model in and out between every turn.
+      if (pick.prose) { us.value = pick.prose; pick.utility = pick.prose; }
+      $('setupGo').disabled = !pick.prose;
+    };
+    us.onchange = () => { pick.utility = us.value; };
+
+    row('Narrator', 'The model that writes the prose. Bigger is better here, and '
+      + 'this is where almost all the time per turn goes.', ps);
+    row('Structured work', 'Extracts state, summarises chapters, proposes lorebook '
+      + 'entries. Leave it on the same model unless you have a reason \u2014 two '
+      + 'different models means ollama swaps them in and out every turn.', us);
+  }
+
+  // 3. embeddings
+  row(d.embed_present ? 'Long-term memory ready' : 'Long-term memory will be degraded',
+      d.embed_present
+        ? `${d.embed_model} is installed.`
+        : `${d.embed_model} is not installed. Without it, long-term memory falls back `
+          + `to recency ordering \u2014 it still works, it just stops being about `
+          + `relevance. Run: ollama pull ${d.embed_model}`)
+    .classList.add(d.embed_present ? 'good' : 'warn');
+
+  // 4. images
+  row(d.images_reachable ? 'Image generation ready' : 'No image server',
+      d.images_reachable
+        ? `${d.image_url} is answering. Portraits are available.`
+        : `${d.image_url} is not answering. loom runs fine without it \u2014 you get `
+          + 'text and no portraits. See the README for stable-diffusion.cpp.')
+    .classList.add(d.images_reachable ? 'good' : 'muted');
+
+  $('setupGo').onclick = async () => {
+    $('setupGo').disabled = true;
+    $('setupStatus').textContent = 'saving\u2026';
+    try {
+      await api('/api/settings', { changes: {
+        'PROSE.model': pick.prose,
+        'UTILITY.model': pick.utility || pick.prose,
+      } });
+      $('setup').classList.add('hidden');
+      await boot();
+    } catch (e) {
+      $('setupStatus').textContent = e.message;
+      $('setupGo').disabled = false;
+    }
+  };
+  $('setupSkip').onclick = async () => {
+    $('setup').classList.add('hidden');
+    await boot();
+  };
+
+  $('boot').classList.add('hidden');
+  $('setup').classList.remove('hidden');
+  return true;
+}
+
 async function boot() {
   const [stories, sessions, health] = await Promise.all([
     api('/api/stories'), api('/api/sessions'), api('/api/health').catch(() => null),
@@ -3206,7 +3308,9 @@ $('setReset').onclick = async () => {
   renderSettings();
 };
 
-boot();
+/* Setup first, and only if nothing is configured -- maybeSetup() returns false
+   immediately otherwise, so a normal start is one extra GET. */
+maybeSetup().then((shown) => { if (!shown) boot(); });
 
 
 /* ------------------------------------------------------------------ ledger

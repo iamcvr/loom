@@ -291,13 +291,20 @@ def status() -> dict:
 
 
 def reachable() -> bool:
-    """Fast probe for the UI. Must never block a page load — a firewalled or
-    absent ComfyUI should answer 'no' in a couple of seconds, not thirty."""
+    """Fast probe for the UI. Must never block a page load — a firewalled or absent
+    image server should answer 'no' in a couple of seconds, not thirty.
+
+    It called ComfyUI's /system_stats through a _get() helper that was deleted when
+    this module moved to /sdapi/v1, so it raised NameError, the bare except swallowed
+    it, and images reported unreachable no matter what was running. /sdapi/v1/samplers
+    is the cheapest GET every server implementing this API answers.
+    """
     if not config.IMAGES_ENABLED:
         return False
     try:
-        _get("/system_stats", timeout=3)
-        return True
+        url = config.IMAGE_URL.rstrip("/") + "/sdapi/v1/samplers"
+        with urllib.request.urlopen(url, timeout=3) as r:
+            return r.status == 200
     except Exception:
         return False
 

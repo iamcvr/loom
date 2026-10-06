@@ -846,6 +846,27 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
    The advisor still exists -- advisor.py, POST /api/advise and the panel markup are
    all intact -- it simply has no way in. Deleting it is a separate decision; this is
    the reversible half of it. */
+/* First-run setup. One row per thing that is either ready or not, so the screen
+   reads as a checklist rather than a form. */
+.setupBody { flex: 1; overflow-y: auto; padding: 24px; max-width: 46em;
+  margin: 0 auto; width: 100%;
+  font-family: ui-sans-serif, system-ui, sans-serif; }
+.setupBody .lede { color: var(--muted); line-height: 1.6; margin: 0 0 20px; }
+.setupRow {
+  padding: 14px 16px; margin-bottom: 10px; background: var(--bg2);
+  border: 1px solid var(--line); border-left: 3px solid var(--line);
+  border-radius: var(--radius);
+}
+.setupRow.good { border-left-color: var(--ok); }
+.setupRow.warn { border-left-color: var(--warn); }
+.setupRow.bad  { border-left-color: var(--accent); }
+.setupName { font-weight: 600; margin-bottom: 4px; }
+.setupRow select {
+  margin-top: 9px; width: 100%; background: var(--bg3); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+}
+.setupFoot { display: flex; align-items: center; gap: 10px; margin-top: 20px; }
+
 #btnSettings2 { display: none; }
 .advisor { display: none; }
 
