@@ -719,6 +719,14 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
 /* An attributed spoken line: the speaker's portrait, then the line itself. The
    portrait is an enrichment -- a speaker without one still gets the attributed
    line, because the format earns its place on its own. */
+/* The player's own face beside "You". Small -- it is an identifier, not a picture
+   to look at, unlike the speaker portraits inside a reply. */
+.msg .who { display: flex; align-items: center; gap: 7px; }
+.whoShot {
+  width: 22px; height: 22px; border-radius: 50%; object-fit: cover;
+  object-position: 50% 18%; border: 1px solid var(--line); cursor: zoom-in;
+}
+
 .speak { display: flex; align-items: center; gap: 14px; margin: 18px 0; }
 .speak img {
   flex: 0 0 104px; width: 104px; aspect-ratio: 3/4; object-fit: cover;

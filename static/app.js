@@ -655,7 +655,22 @@ function messageNode(m) {
   const who = m.role === 'user'
     ? (narrative() ? 'Direction' : 'You')
     : (S.state?.story?.name || 'Narrator');
-  n.append(el('div', 'who', who));
+  const head = el('div', 'who');
+  // Your own face on your own turns. The cast have had theirs since the format
+  // landed and the player was the one person in the scene without one.
+  if (m.role === 'user' && !narrative()) {
+    const mine = portraitFor(S.state?.protagonist?.name || '');
+    if (mine) {
+      const a = el('img', 'whoShot');
+      a.src = mine;
+      a.alt = S.state?.protagonist?.name || 'you';
+      a.title = 'View full size';
+      a.onclick = () => lightbox(mine, S.state?.protagonist?.name || 'You');
+      head.append(a);
+    }
+  }
+  head.append(el('span', null, who));
+  n.append(head);
   const body = el('div', 'body');
   renderBody(body, m.content);
   n.append(body);
@@ -1508,7 +1523,15 @@ async function send(text, retryId, resumeId) {
     // Blocks are built once, here. During streaming the body is appended to as
     // plain text, because a half-arrived '**Chloe** | "...' would flicker into a
     // speaker block and back out again on the very next token.
-    if (raw && !S.gotError) renderBody(body, raw);
+    //
+    // Against the node that is actually on the page. A 'state' event mid-stream
+    // calls render(), which rebuilds the whole list and detaches `body` -- so this
+    // used to format an orphan and the portraits only appeared on a reload.
+    if (raw && !S.gotError) {
+      const target = body.isConnected ? body
+        : document.querySelector(`.msg[data-id="${live.dataset.id}"] .body`);
+      if (target) renderBody(target, raw);
+    }
     if (!S.gotMessage && !S.gotError) await recoverTurn(live, null, resumeId);
     if (S.gotError && !resuming) live.remove();
   } catch (e) {
