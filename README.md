@@ -5,16 +5,13 @@ around the model decides what it is allowed to remember, what it is reminded of,
 and when. Roughly 200KB of Python and a vanilla-JS frontend, no dependencies
 beyond `pyyaml`.
 
-**Running at** http://solos:8100 (native, systemd `--user` unit). An older
-Docker deployment also exists on atlas — see [Running it](#running-it).
-**Writing stories:** [`stories/README.md`](stories/README.md).
+Everything runs on one machine and nothing leaves it: prose and embeddings from
+a local ollama or any OpenAI-compatible server, images from a local
+stable-diffusion.cpp. There are no API keys to configure because there is nowhere
+to send them.
 
-> This is the fifth generation of this idea and the keeper. `ai_homegirl`,
-> `wren`, `story-writer` and `companion` were retired on 2026-08-23; loom shares
-> no code with any of them. What they did better is written down in
-> `~/Projects/archive/docs/PORTING.md` — read that before concluding loom cannot
-> do something. If a task is "AI writes or roleplays a story," it belongs here.
-> Do not scaffold generation six.
+**Writing stories:** [`stories/README.md`](stories/README.md).
+**What is measured, and what it cost:** [`MEASUREMENTS.md`](MEASUREMENTS.md).
 
 ---
 
@@ -35,24 +32,24 @@ tuned, measured and reasoned about.
 
 ## Running it
 
-**Natively**, as a systemd `--user` unit (how it runs on solos):
+**Directly:**
+
+```bash
+python3 run.py          # needs pyyaml; LOOM_STORIES and LOOM_STATE
+                        # default to ./stories and ./state
+```
+
+**As a systemd `--user` unit**, which is how it is meant to run — set
+`PYTHONUNBUFFERED=1` in the unit or every diagnostic loom prints is buffered away
+where you cannot see it:
 
 ```bash
 systemctl --user restart loom
 journalctl --user -u loom -f
 ```
 
-Or directly: `python3 run.py` — needs `pyyaml`, and `LOOM_STORIES` / `LOOM_STATE`
-default to `./stories` and `./state`.
-
-**Under Docker:**
-
-```bash
-cd ~/docker
-docker compose up -d --build loom     # code changes need the rebuild
-docker compose logs -f loom
-docker compose restart loom
-```
+**Under Docker**, with `compose up -d --build loom`. Code changes need the rebuild
+because `COPY *.py /app/` bakes them in.
 
 **What needs what:**
 
@@ -66,21 +63,21 @@ docker compose restart loom
 A first install has neither a prose nor a utility model configured — see
 [`TODO.md`](TODO.md) §8, which is the gap where a setup guide belongs.
 
-### Deployment facts
+### What it talks to
 
-| | |
-|---|---|
-| Port | 8100 |
-| State | `~/docker/config/loom/state` → `/state` (SQLite, media, settings.json) |
-| Stories | `~/Projects/loom/stories` → `/stories` |
-| Models | ollama on `LOOM_OLLAMA_URL` — no API keys, nothing leaves the host |
-| Embeddings | `LOOM_EMBED_URL`, `nomic-embed-text` |
-| Images | `http://172.19.0.1:8188` — the bridge gateway, i.e. ComfyUI on the host |
-| Healthcheck | `GET /api/stories` every 30s |
+| | Environment variable | Default |
+|---|---|---|
+| Port | `LOOM_PORT` / `LOOM_HOST` | `8100` / `127.0.0.1` |
+| State | `LOOM_STATE` | `./state` — SQLite, media, `settings.json` |
+| Stories | `LOOM_STORIES` | `./stories` |
+| Prose and utility models | `LOOM_OLLAMA_URL` | `http://127.0.0.1:11434` |
+| Embeddings | `LOOM_EMBED_URL` | same host, `nomic-embed-text` |
+| Images | `LOOM_IMAGE_URL` | `http://127.0.0.1:1234` |
+| Healthcheck | — | `GET /api/stories` |
 
-ComfyUI is reached over the network, never the filesystem — that is why it could
-be moved out to its own top-level folder without touching loom. Keep it that way
-(`~/Projects/CLAUDE.md`, rule 3).
+Every one of these is reached over HTTP, never the filesystem, so each can live in
+its own container, on its own port, or not exist at all. Images are optional: with
+no image server reachable, loom runs with text and no portraits.
 
 ---
 
@@ -89,19 +86,22 @@ be moved out to its own top-level folder without touching loom. Keep it that way
 | File | Lines | Responsibility |
 |---|---|---|
 | `run.py` | 11 | entry point |
-| `config.py` | ~220 | **every** tunable constant, plus paths and provider specs |
-| `server.py` | ~650 | `ThreadingHTTPServer`, all routes, the turn loop |
-| `assemble.py` | ~520 | the context-budget arbiter — builds the prompt |
-| `memory.py` | ~680 | heat, decay, retrieval, keyword matching, nudges, the delta |
-| `store.py` | ~1000 | SQLite. All of it. No ORM, no migration framework |
-| `brain.py` | ~490 | model routing: streaming prose, structured utility, embeddings |
-| `story.py` | ~580 | story files: validate, load, hot-reload, save, duplicate |
-| `chapters.py` | ~230 | compaction — turns become summaries |
+| `config.py` | ~460 | **every** tunable constant, plus paths and provider specs |
+| `server.py` | ~945 | `ThreadingHTTPServer`, all routes, the turn loop |
+| `assemble.py` | ~720 | the context-budget arbiter — builds the prompt |
+| `memory.py` | ~730 | heat, decay, retrieval, keyword matching, nudges, the delta |
+| `store.py` | ~1190 | SQLite. All of it. No ORM, no migration framework |
+| `brain.py` | ~550 | model routing: streaming prose, structured utility, embeddings |
+| `story.py` | ~770 | story files: validate, load, hot-reload, save, duplicate |
+| `settings.py` | ~680 | which constants are live-editable, and persistence |
+| `images.py` | ~360 | the render queue, entirely off the turn loop |
+| `rulebuilder.py` | ~340 | twelve questions that add up to a story's rules |
+| `advisor.py` | ~320 | plain-language requests to a proposed settings change |
+| `import_history.py` | ~310 | one-off: a story written elsewhere becomes a session |
 | `lorebook.py` | ~250 | durable keyword-fired notes, and suggesting new ones |
-| `images.py` | ~280 | ComfyUI queue, entirely off the turn loop |
-| `settings.py` | ~480 | which constants are live-editable, and persistence |
-| `import_history.py` | ~290 | one-off: a story written elsewhere becomes a session |
-| `static/` | ~3300 | vanilla JS/CSS/HTML. No build step, no framework |
+| `chapters.py` | ~240 | compaction — turns become summaries |
+| `ledger.py` | ~210 | facts the player approved, which outrank the prose |
+| `static/` | ~4500 | vanilla JS/CSS/HTML. No build step, no framework |
 
 Dependency direction is strictly downward: `server` → `assemble`/`memory`/
 `chapters`/`images` → `store`/`brain` → `config`. `story.py` is a leaf that only
@@ -193,10 +193,16 @@ important items — never truncating text mid-sentence.
    while a lower-priority layer starves. `transcript` is last, so it absorbs the
    slack.
 
-**Characters, not tokens.** Cheap to measure, and the ratio is stable enough
-(~3.6 chars/token on English prose). `BUDGET_TOTAL` is 48,000 ≈ 13k tokens, and
-it is also the cost dial: it bounds what you pay per turn more directly than any
-other setting.
+**Characters, not tokens.** Cheap to measure, and the ratio is stable enough —
+3.15 chars/token, measured against this engine's own prompts rather than taken from
+a rule of thumb.
+
+**One knob sets all of it.** The character budget is derived from `PROSE.num_ctx`:
+the reply ceiling is reserved out of the context window and the remainder becomes
+what the arbiter has to spend. Three numbers that had to be kept in agreement by
+hand are now one that cannot disagree with itself, and the layer ceilings scale with
+it — raising the window is otherwise pointless for every layer except the transcript,
+which is the only one that absorbs slack.
 
 **The layers**, in priority order (`config.BUDGET_LAYERS`):
 
@@ -489,13 +495,23 @@ nothing to reverse) and the lorebook (the one layer the author curates by hand).
 ## Images
 
 `images.py`. A single background worker drains a queue; nothing here is ever
-awaited by a reply. A render takes 20–40s on the 4070 and must never be in the
-critical path.
+awaited by a reply. A render takes 20–40s on a discrete GPU and about 43s on a
+Strix Halo iGPU, and must never be in the critical path.
 
-The ComfyUI workflow is a hardcoded 7-node graph (`_workflow`) —
-checkpoint → empty latent → two CLIP encodes → KSampler → VAE decode → save.
-Changing sampler, adding a LoRA or switching to a different pipeline means
-editing that dict.
+loom speaks the **AUTOMATIC1111 `/sdapi/v1/txt2img` shape**, which
+stable-diffusion.cpp's `sd-server` implements, as do A1111, Forge and reForge — so
+the backend is a choice rather than a dependency. One request, one base64 PNG back.
+A story's own `checkpoint` field is currently accepted and ignored: an `sd-server`
+process loads one model at startup and this API cannot switch it per request.
+
+**Portraits are chosen, not just generated.** Saving a story offers to draw its
+cast, one row per character, each re-rollable on the spot; the chosen image is
+copied into `stories/<id>/portraits/` so it belongs to the story and every
+playthrough sees the same faces. The player's own portrait is drawn the same way at
+the end of character creation, and belongs to the session instead, because who you
+are can differ between playthroughs while the cast does not. Filenames carry a
+timestamp: a re-roll that reused the name served a year-old cached image to
+everything that had already loaded it.
 
 Portraits are cached per character name forever and keyed by the **canonical**
 name — aliases are resolved *before* the cache check, or the same character gets
@@ -524,8 +540,15 @@ config module takes effect on the very next turn. Overrides are stored sparsely
 — only what differs from the default — so upgrading `config.py`'s defaults still
 reaches anything the user never touched.
 
-Deliberately absent: paths, host/port, API keys. Those are deployment facts, not
-tuning, and the keys must not be shipped to a browser.
+`CORE_RULES` lives here too, which is the one knob that is prose rather than a
+number: the engine's own contract, shared by every story and rendered ahead of each
+story's own rules. It covers what makes loom loom rather than what makes a story a
+story — the player's character is theirs alone, any input format is accepted without
+comment, narration is clean prose, one thing happens at a time and the player ends
+scenes, and a weighty spoken line gets its own attributed paragraph. A story file
+then carries only what is actually its own: tone, world, cast.
+
+Deliberately absent: paths and host/port. Those are deployment facts, not tuning.
 
 `update()` is all-or-nothing, because these knobs interact — half-applying a
 budget change can leave floors summing past the total, which degrades every turn
@@ -537,8 +560,7 @@ until someone notices.
 
 `import_history.py` turns a file of finished prose into a session. It exists
 because there is no field the prose can go in: a real import ran 194,893
-characters against a 48,000-character `BUDGET_TOTAL`, four times the whole
-window. So it does to imported text exactly what the engine does to text it
+characters against a budget of about 48,000, four times the whole window. So it does to imported text exactly what the engine does to text it
 writes itself — cuts it into turns, closes chapters over them, summarises those,
 folds the aged ones into the synopsis, and seeds long-term memory — and the
 result is an ordinary session rather than a special case.
@@ -595,7 +617,20 @@ Introspection: `GET /api/health` · `GET /api/context/<id>` · `GET /api/prompt`
 `GET /api/models` · `GET /api/probe` · `GET`/`POST /api/settings` ·
 `POST /api/settings/reset`
 
-Images: `POST /api/portrait` · `POST /api/portrait/describe` · `GET /media/<f>`
+Images: `POST /api/portrait` · `POST /api/portrait/describe` ·
+`POST`/`GET /api/candidates` (queue portrait options, poll as each lands) ·
+`POST /api/cast-portrait` · `POST /api/cast-portrait/delete` · `GET /media/<f>` ·
+`GET /story-img/<story>/<file>`
+
+Authoring aids: `GET`/`POST /api/rulebuilder` (the twelve questions, and the prose
+they generate) · `POST /api/advise` (a plain-language settings request in, a
+validated proposal out)
+
+A story's rules can be generated rather than written: twelve questions about tone,
+cast, action, romance, pacing, stakes and how explicit it gets, each mapping to an
+authored paragraph rather than a flag. The output lands in the Rules box as ordinary
+editable text — never a hidden config behind the answers, because an author who
+dislikes how their story reads has to be able to find the sentence responsible.
 
 **`GET /api/prompt?session=<id>` returns the entire assembled packet** — system
 prompt, messages and the per-layer allocation report. It is the first thing to
@@ -708,7 +743,7 @@ must come *after* their exact-match siblings (`/api/story/new`).
 4. **Constants live in `config.py`.**
 5. **`config.X` is read at call time**, or live settings silently stop working.
 6. **Layers are lists of items, not blobs.**
-7. **Degrade, don't break.** Ollama down → recency ordering. ComfyUI down → no
+7. **Degrade, don't break.** Ollama down → recency ordering. Image server down → no
    pictures. Browser gone → the turn still completes.
 8. **Validation collects every problem**, never raises on the first.
 9. **Writes are atomic** — temp file plus rename, for both `story.yaml` and
@@ -722,18 +757,27 @@ must come *after* their exact-match siblings (`/api/story/new`).
 ## Known gaps
 
 - **No tests.** `apply_delta` is deliberately separated from `digest` so a delta
-  can be replayed without a model call, and `assemble.allocate` is a pure
-  function over a dict of lists — those two are where a first test suite would
-  pay for itself immediately.
-- **No git remote.** Versioned locally on `master`; nothing is pushed anywhere.
-- **The action-pacing templates are Seiran-specific** and hardcoded in
-  `memory.py`. See [Pacing](#pacing-goals-and-action).
-- **The ComfyUI workflow is a hardcoded node graph** — no LoRA support, one
-  sampler, one checkpoint.
-- **`_ADDED_COLUMNS` is the entire migration story.** Fine so far; it only
-  handles added columns, not changed or dropped ones.
-- **The editor cannot edit `protagonist`, `pacing`, `mode` or `arc`.** All four
-  round-trip safely through a save; none has a UI.
-- **No provider fallback.** The refusal-fallback tier was removed with the
-  frontier providers on 2026-10-05; a local model has no comparable refusal
-  signal to trigger it. See [`TODO.md`](TODO.md).
+  can be replayed without a model call, `assemble.allocate` is a pure function over
+  a dict of lists, and `rulebuilder.build` is pure. Those three are where a first
+  test suite would pay for itself immediately.
+- **The shipped defaults do not fit.** `num_ctx` 8192 with `max_tokens` 4000 leaves
+  less budget than the layer floors need, and `settings.update()` validates the
+  whole state — so a fresh clone cannot save any setting until this is changed.
+  See [`TODO.md`](TODO.md) §8.
+- **There is no path from `git clone` to a working loom.** No model is configured
+  out of the box and nothing says what to do about it.
+- **The action-pacing templates are story-specific** and hardcoded in `memory.py`.
+  See [Pacing](#pacing-goals-and-action).
+- **One checkpoint per image server.** A story's `checkpoint` field parses and is
+  ignored; `/sdapi/v1` cannot switch models per request.
+- **No expression sets.** One portrait per character. A mood set needs a stored
+  per-character seed, or the faces drift into different people between expressions.
+- **`_ADDED_COLUMNS` is the entire migration story.** Fine so far; it only handles
+  added columns, not changed or dropped ones.
+- **The editor cannot edit `pacing` or `arc`.** Both round-trip safely through a
+  save; neither has a UI.
+- **`raw` and `narrative` modes are not offered.** Both still parse and run, so old
+  story files keep working, but neither was developed past a sketch and the editor
+  only offers `play`.
+- **Mobile is partly done.** The structural faults are fixed; screens that were
+  never opened on a phone have not been checked. See [`TODO.md`](TODO.md) §10.
