@@ -917,6 +917,22 @@ input[type=number]::-webkit-outer-spin-button {
   .advisePanel { width: calc(100vw - 20px); }
   .adviseLog { max-height: 50vh; }
 
+  /* Found by auditing the stylesheet for layouts that assume horizontal space,
+     rather than by opening each screen -- which is still worth doing. */
+
+  /* The portrait builder is two columns of selects. At 390px that is two 180px
+     columns of truncated option text. */
+  .pbuild { grid-template-columns: 1fr; }
+
+  /* The probe table is a real <table> with a nowrap status column, a monospace
+     model name and a right-aligned latency. It cannot reflow, so let it scroll
+     sideways inside its own box instead of widening the page. */
+  .probeTable { display: block; overflow-x: auto; white-space: nowrap; }
+
+  /* A lorebook key is ellipsised at 55% of the row. On a phone that is about
+     thirty characters of a key that is usually longer, so it wraps instead. */
+  .loreRow .lk { max-width: 100%; white-space: normal; overflow: visible; }
+
   /* Narrower on a phone, where 104px of a 390px line is a third of the width. */
   .speak { gap: 10px; }
   .speak img { flex: 0 0 76px; width: 76px; }

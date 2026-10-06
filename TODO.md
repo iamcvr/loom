@@ -17,10 +17,32 @@ changing shape underneath them.
 
 ## What is left
 
-Three items — the documentation and polish a release needs. The one actual bug,
-defaults that did not fit their own layer floors, is fixed and in Done below.
+Two items.
 
-### 1. First-install setup guide
+### 1. Mobile
+
+Two passes done, both from the stylesheet rather than from a phone.
+
+**2026-10-05, the structural faults:** the settings nav ate half the screen, fixed
+widths overflowed, dialogs were letterboxed, tap targets were mouse-sized, and a
+dialog body scrolled the page behind it instead of itself.
+
+**2026-10-06, an audit for layouts that assume horizontal space:** the portrait
+builder was two columns of selects, which at 390px is two 180px columns of truncated
+option text; the probe table is a real `<table>` with a nowrap status column and a
+monospace model name, so it now scrolls sideways in its own box rather than widening
+the page; a lorebook key was ellipsised at 55% of its row, which on a phone is about
+thirty characters of a key that is usually longer, so it wraps. Every selector in the
+phone block was checked to exist in the markup — one did not and was an invented
+class.
+
+**What is actually left needs a phone.** The audit finds rules that cannot work; it
+cannot find a screen that is merely unpleasant — spacing, reachability, whether a
+dialog's footer is above the keyboard, whether the composer is usable one-handed.
+That is a pass screen by screen with a device in hand, and it is the only honest way
+to close this.
+
+### 2. First-install setup guide
 
 **There is no path from `git clone` to a working loom.** `PROSE.model` and
 `UTILITY.model` default to `""` on purpose — no model name is right for every host
@@ -45,27 +67,21 @@ document? An unconfigured loom fails at the first turn with a provider error, wh
 is a poor first impression. A setup screen listing what ollama actually holds would
 beat any README section.
 
-### 2. Mobile
-
-The phone pass on 2026-10-05 fixed the structural faults: the settings nav ate half
-the screen, fixed widths overflowed, dialogs were letterboxed, tap targets were
-mouse-sized, and a dialog body scrolled the page behind it instead of itself.
-
-What is left is not a known list. It is every screen that has never been opened on a
-phone — the editor's repeatable sections, the chapter and lorebook dialogs, the
-ledger, the arc pane, and the portrait rows added since. That needs a pass with a
-phone in hand, screen by screen, rather than another guess from the stylesheet.
-
-### 3. Repo hygiene
-
-`story.py:628` cites a path under the author's home directory in a docstring, which
-will mean nothing to anyone else.
-
 ---
 
 ## Done
 
 The numbering below is historical — these were §§1-9 when they were open.
+
+### ~~Repo hygiene~~ — 2026-10-06
+
+`.gitignore` and the git remote were done earlier. The last of it was references to
+the author's own machine: a docstring citing a rules file under their home
+directory, a settings help string pointing at a ledger on a named host, a LAN
+address as the example URL in the LOCAL provider spec, and a bench tool carrying
+both a host name and a ~/docker path for a file sitting beside it in the repo.
+Found by sweeping rather than by remembering. MEASUREMENTS.md keeps its host names
+deliberately — it records what was measured on which machine.
 
 ### ~~The shipped defaults did not fit their own layer floors~~ — 2026-10-06
 
