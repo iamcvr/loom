@@ -181,14 +181,11 @@ async function start(storyId) {
   // it is stored as a real message rather than re-rendered every load.
   let story = null;
   try { story = await api('/api/story/' + encodeURIComponent(storyId)); } catch { /* play anyway */ }
-  if (story?.protagonist?.name) {
-    openPC({ storyId, defaults: story.protagonist });
-    return;
-  }
-  const st = await api('/api/session', { story: storyId });
-  S.id = st.session_id;
-  render(st);
-  show();
+  // Always ask. Starting a session is starting a playthrough and a playthrough
+  // has somebody in it -- the same story played twice can be two different
+  // people, the way it works in any other game. A story's protagonist block,
+  // where it has one, only pre-fills the form.
+  openPC({ storyId, defaults: story?.protagonist || null });
 }
 
 /* ------------------------------------------------------------------ the player
@@ -213,7 +210,7 @@ function pcField(body, label, help, value, opts = {}) {
 
 function openPC({ storyId = null, defaults = null } = {}) {
   const editing = !storyId;
-  const cur = editing ? (S.state?.protagonist || {}) : defaults;
+  const cur = (editing ? S.state?.protagonist : defaults) || {};
   PC.mode = editing ? 'edit' : 'create';
   PC.storyId = storyId;
   PC.defaults = defaults;

@@ -504,10 +504,20 @@ class Handler(BaseHTTPRequestHandler):
                 # Who the player chose to be, before the prologue is written —
                 # the prologue names them, and it is stored as a real message, so
                 # it has to be substituted once here rather than on every read.
-                pro = story_mod.protagonist_defaults(st)
-                if pro:
-                    pro = store.set_protagonist(sid, {**pro, **(body.get("protagonist") or {})})
-                    images.set_portrait_prompt(sid, pro["name"], pro.get("prompt", ""))
+                # The protagonist belongs to the SESSION, not the story. A story
+                # describes a world and the people already in it; who the player is
+                # this time is answered when they sit down, and answered again
+                # differently on the next playthrough. So a story's protagonist
+                # block, when it has one, is a suggested starting point and nothing
+                # more — and a story without one still gets whatever the player
+                # typed, which it previously discarded.
+                defaults = story_mod.protagonist_defaults(st) or {}
+                submitted = body.get("protagonist") or {}
+                pro = None
+                if defaults or submitted:
+                    pro = store.set_protagonist(sid, {**defaults, **submitted})
+                    if pro.get("name"):
+                        images.set_portrait_prompt(sid, pro["name"], pro.get("prompt", ""))
 
                 store.add_message(
                     sid, "assistant",
