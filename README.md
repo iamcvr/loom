@@ -344,28 +344,12 @@ prerequisite to using pacing anywhere else.
 
 ---
 
-## Narrative mode and the arc
+## The arc
 
-A story declares `mode: narrative` when there is no player in it — the model
-writes every character and the reader watches. Three things change:
-
-1. **The composer becomes the director's channel.** What the reader types is
-   still stored as a user message, but the story's `rules` establish that a line
-   from outside is the author speaking, not a character. The UI labels it
-   *Direction* and sets it apart from the prose. Empty sends are the normal case.
-2. **The extractor stops asking about "the player."** `memory._digest_prompt`
-   swaps its player-centric wording — relationships become how the leads regard
-   *each other*, goals become what the leads have committed to, and the exchange
-   is presented as a passage rather than a PLAYER/NARRATOR pair. Left unchanged
-   it attributes the leads' feelings to a "you" that is nowhere in the prose and
-   the relationship layer fills with nonsense.
-3. **`_items_state` renames its heading**, because there is no "you" to be seen
-   by anyone.
-
-**The arc is the part that matters.** Loom otherwise has no concept of position:
-goals are tactical, chapters are compaction, the pacing counter is cadence.
-Nothing knows how far through a story is, and nothing knows a story can be over —
-so a story left alone wanders pleasantly forever and never arrives.
+Loom otherwise has no concept of position: goals are tactical, chapters are
+compaction, the pacing counter is cadence. Nothing knows how far through a story
+is, and nothing knows a story can be over — so a story left alone wanders
+pleasantly forever and never arrives.
 
 ```yaml
 arc:
@@ -385,11 +369,17 @@ without the author reasoning about the budget. A per-session manual override in
 counter only knows that time has passed while the reader knows whether the beat
 actually landed.
 
-`_items_arc` injects the act, its number out of the total, and — in the last act
-— a plain statement that this is the last one. That final line is what lets the
-model land an ending instead of continuing.
+### Modes
 
----
+`play` is the only mode the editor offers: the player is a character, and the
+narrator never writes their dialogue, actions or thoughts. Two others still parse
+and still run, so an older story file keeps working, but neither was developed past
+a sketch and neither is offered when creating a story — `raw`, where the player
+directs and the model writes every character including theirs, and `narrative`,
+where nobody plays and the model writes everyone. The engine adapts to both where
+it has to: `memory._digest_prompt` swaps its player-centric wording for a narrative
+story, or the relationship layer fills with the feelings of a "you" who is nowhere
+in the prose.
 
 ## Chapters and the lorebook
 
@@ -579,7 +569,7 @@ result is an ordinary session rather than a special case.
 
 ```bash
 docker cp import_history.py loom:/app/ && docker exec loom \
-  python3 /app/import_history.py the-mercy /stories/the-mercy/export.md \
+  python3 /app/import_history.py my-story /stories/my-story/export.md \
   --turn-chars 3000 --carry-from 12 --carry-after 578 --dry-run
 ```
 

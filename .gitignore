@@ -13,9 +13,18 @@ loom-state/
 *.db-shm
 *.db-wal
 
-# The story library is personal. stories/README.md is documentation and IS tracked.
+# The story library is personal. Two exceptions ship: the authoring guide, and
+# Seiran as a worked example -- a story someone can open in the editor and read to
+# see what a finished one looks like, which no amount of documentation replaces.
 stories/*
 !stories/README.md
+!stories/seiran
+!stories/seiran/story.yaml
+# Generated art is derived data and large -- 1.6MB a face across a cast of fifteen.
+# The example ships as the story file alone; portraits regenerate on any host that
+# has an image server.
+stories/seiran/portraits/
+stories/seiran/media/
 
 # Sweep output
 *.jsonl

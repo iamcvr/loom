@@ -11,7 +11,12 @@ The directory name is the story id. It is validated, never sanitised
 with a letter or digit, at most 64 characters. `stories/my-story/story.yaml`
 gives you a story with id `my-story`.
 
-Currently here: `veyra`, `veyra-two`, `veyra-contingency`, `seiran`, `kindling`.
+**`seiran` ships with loom as a worked example.** It is a finished story rather than
+a template — 5,207 characters of rules, fifteen cast members, a lorebook, a stat and
+an opening — and the fastest way to understand any section below is to open it in the
+editor and read what it actually does. Everything in this guide is illustrated from
+it. Duplicate it if you want to start from something that works rather than from
+nothing.
 
 ---
 
@@ -297,7 +302,8 @@ scene sitting right before the generation point.
 ## Narrative mode
 
 `mode: narrative` means there is no player: the model writes every character and
-the reader watches. `kindling` is the one that does this.
+the reader watches. It still parses and still runs, but it was never developed past
+a sketch and the editor does not offer it — `play` is the only mode on the menu.
 
 What changes:
 
@@ -342,7 +348,7 @@ Writing an act `shape` well:
 - Explicitly permit slowness. *"Everything this act asks for does not have to
   happen in this passage"* — otherwise a 900-character act description reads as a
   checklist for the next four paragraphs.
-- Keep each act under the 2,500-character ceiling; the five in `kindling` run
+- Keep each act under the 2,500-character ceiling; five acts in a real story ran
   930–1,020.
 
 ---
@@ -399,15 +405,17 @@ fit, so an over-long `rules` block means the opening scene vanishes from every
 turn for the life of the story, with nothing in the prose to say it happened.
 That is exactly what `assemble.story_fit` exists to catch.
 
-Where the existing stories sit:
+Where a real story sits. `seiran` ships with loom, so these are numbers you can
+check yourself in the editor:
 
 | Story | `rules` layer | always-on notes | intros | stats | notes | cast |
 |---|---|---|---|---|---|---|
-| `veyra` | 4,772 / 11,000 | 1,396 | 1 | 3 | 12 | 5 |
-| `veyra-two` | 8,096 / 11,000 | 3,015 | 1 | 1 | 8 | 2 |
-| `veyra-contingency` | 5,950 / 11,000 | 4,532 | 1 | 4 | 14 | 5 |
-| `seiran` | 10,012 / 11,000 | 3,105 | 1 | 1 | 8 | 15 |
-| `kindling` | 6,812 / 11,000 | 1,767 | 1 | 3 | 6 | 2 |
+| `seiran` | 8,382 / 11,000 | 3,105 | 1 | 1 | 8 | 15 |
+
+Measured across five stories written for this engine, the `rules` layer ran between
+4,800 and 8,400 characters and the always-on lorebook notes between 1,400 and 4,500.
+A story is comfortable well under the ceiling; the ones that got close did so by
+accumulating rules rather than by needing them.
 
 Multiple intros share one `rules` and one `details`, so each intro's
 `opening_scene` is measured against the same ceiling separately — a story with
@@ -466,7 +474,7 @@ file tells you everything wrong with it in one pass.
 
 ## Gotchas
 
-- **`id:` inside `story.yaml` is ignored.** `veyra/story.yaml` has one; it does
+- **`id:` inside `story.yaml` is ignored.** Some stories carry one; it does
   nothing. The directory name wins.
 - **`story.yml` shadows `story.yaml`** in the lookup order. A save renames any
   stray `.yml` to `.yml.bak` to prevent exactly this.
