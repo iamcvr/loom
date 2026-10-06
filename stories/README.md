@@ -24,7 +24,7 @@ The intended path for a story built from scratch. See
 
 ### 2. The built-in editor
 
-http://atlas:8100 → **＋** on the boot screen. Sections: Story / Intros / Stats /
+The boot screen → **＋**. Sections: Story / Intros / Stats /
 Keywords / Cast. **Check** runs full validation *and* the context-budget fit
 report without writing anything. **Save** writes `story.yaml` atomically and
 keeps the previous version as `story.yaml.bak`.
@@ -87,7 +87,7 @@ character counts against ceilings, not a claim that it "should fit".
 - Overwrite an existing story id. New story, new directory.
 - Edit a story you are mid-session on without saying so — a live session reloads
   the file on its next turn, so a `rules` change lands immediately and mid-scene.
-- Delete anything. Per `~/Projects/CLAUDE.md`, destructive work gets a tarball to
+- Delete anything. Destructive work gets a tarball to
   `~/backups/` first.
 
 ### Reviewing what came back
@@ -477,11 +477,7 @@ file tells you everything wrong with it in one pass.
   never the deltas, so there is nothing to reverse. Adjust by hand if it matters
   (`store.rewind_to`).
 - **The `.bak` file is one deep.** Two editor saves in a row and the original is
-  gone. Per `~/Projects/CLAUDE.md`, git is not the safety net in this tree.
-- **A refused scene changes provider, not the story.** If the prose model
-  declines a passage, the turn is re-run once on the fallback tier (xAI by
-  default, Settings → Models) and the UI says so. It only works before any text
-  has been streamed.
+  gone. The story library is gitignored, so git is not the safety net here.
 - **`media/` is copied by Duplicate but is otherwise unused by the schema** —
   only `title_image` references it. Generated portraits and scenes live in the
   state volume (`/state/media`), not here.

@@ -1,10 +1,14 @@
 {
-  "BUDGET_TOTAL": 20000,
   "BUDGET_LAYERS": [
     [
       "director_notes",
       0,
       2000
+    ],
+    [
+      "core",
+      2000,
+      6000
     ],
     [
       "rules",
@@ -73,8 +77,6 @@
   "GOAL_NUDGE_ENABLED": false,
   "IMAGES_ENABLED": false,
   "EMBED_ENABLED": false,
-  "PROSE.provider": "ollama",
-  "PROSE.model": "cydonia-24b-v4.3:Q6_K",
   "PROSE.max_tokens": 1200,
   "PROSE.temperature": 0.7,
   "PROSE.min_p": 0.05,

@@ -22,11 +22,9 @@ edited underneath a running container.
     loomprof model <id>           swap just the prose model (see below)
 
 `model` is the one shortcut, because "try the next contender" is the loop this
-is built for. An ollama tag routes to atlas's ollama over openai_compat; a
-claude-* id routes back to Anthropic.
+is built for.
 
     loomprof model gemma3:12b
-    loomprof model claude-sonnet-5
 """
 
 import json
@@ -90,10 +88,18 @@ def fmt(v):
     return json.dumps(v)
 
 
+# Which model answers is a deployment fact, not a harness setting. A profile says
+# how much machinery runs around the model; leaving these out of the reset means a
+# profile can be loaded without wiping the model somebody configured, and shipped
+# profiles do not have to name a model that will not exist on another host.
+MODEL_KEYS = {"PROSE.model", "PROSE.provider", "PROSE.url", "PROSE.num_ctx",
+              "UTILITY.model", "UTILITY.provider", "UTILITY.url"}
+
+
 def plan(target):
     """(to_reset, to_apply) — reset comes first so nothing bleeds through."""
     now = live()
-    to_reset = sorted(set(now) - set(target))
+    to_reset = sorted(set(now) - set(target) - MODEL_KEYS)
     to_apply = {k: v for k, v in target.items() if now.get(k) != v}
     return to_reset, to_apply
 
@@ -159,12 +165,11 @@ def cmd_load(name):
 
 
 def cmd_model(ident):
-    if ident.startswith("claude-") or ident.startswith("grok-"):
-        changes = {"PROSE.provider": "anthropic" if ident.startswith("claude-")
-                   else "xai", "PROSE.model": ident}
-    else:
-        changes = {"PROSE.provider": "openai_compat", "PROSE.url": OLLAMA,
-                   "PROSE.model": ident}
+    # The frontier branch is gone with the providers it routed to: a claude-* or
+    # grok-* id used to be sent to "anthropic" or "xai", neither of which
+    # settings.update() will now accept.
+    changes = {"PROSE.provider": "openai_compat", "PROSE.url": OLLAMA,
+               "PROSE.model": ident}
     out = api("/api/settings", {"changes": changes})
     for w in out.get("warnings") or []:
         print(f"  warning: {w}")

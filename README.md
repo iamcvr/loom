@@ -60,8 +60,20 @@ because `COPY *.py /app/` bakes them in.
 | `stories/*` | nothing — hot-reloaded on mtime | nothing — bind-mounted |
 | a settings knob | nothing — edited live in the UI, persisted to `state/settings.json` | same |
 
-A first install has neither a prose nor a utility model configured — see
-[`TODO.md`](TODO.md) §8, which is the gap where a setup guide belongs.
+### First run
+
+Nothing is configured out of the box — no model name is right for every host — so
+the first start opens a setup screen instead of failing at the first turn with a
+provider error. It asks which of your installed models should narrate, which should
+do the structured work, and reports whether the two optional services are there:
+
+- **the embedding model** (`nomic-embed-text` by default). Without it, long-term
+  memory falls back to recency ordering. It still works; it stops being about
+  relevance, and nothing announces that it has happened.
+- **an image server**, which is genuinely optional — loom runs on text alone.
+
+The screen is skippable, and everything on it is in Settings afterwards. It appears
+only while `PROSE.model` is empty, so a configured install never sees it.
 
 ### What it talks to
 
@@ -760,8 +772,6 @@ must come *after* their exact-match siblings (`/api/story/new`).
   can be replayed without a model call, `assemble.allocate` is a pure function over
   a dict of lists, and `rulebuilder.build` is pure. Those three are where a first
   test suite would pay for itself immediately.
-- **There is no path from `git clone` to a working loom.** No model is configured
-  out of the box and nothing says what to do about it.
 - **The action-pacing templates are story-specific** and hardcoded in `memory.py`.
   See [Pacing](#pacing-goals-and-action).
 - **One checkpoint per image server.** A story's `checkpoint` field parses and is
@@ -776,4 +786,4 @@ must come *after* their exact-match siblings (`/api/story/new`).
   story files keep working, but neither was developed past a sketch and the editor
   only offers `play`.
 - **Mobile is partly done.** The structural faults are fixed; screens that were
-  never opened on a phone have not been checked. See [`TODO.md`](TODO.md) §10.
+  never opened on a phone have not been checked. See [`TODO.md`](TODO.md).
