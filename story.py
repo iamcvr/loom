@@ -83,7 +83,6 @@ def _validate(raw: Any, story_id: str) -> tuple[dict, list[str]]:
                     "name": _req_str(it, "name", where, p),
                     "prologue": _req_str(it, "prologue", where, p),
                     "opening_scene": it.get("opening_scene", "") or "",
-                    "play_guide": it.get("play_guide", "") or "",
                     "suggestions": [s for s in (it.get("suggestions") or []) if isinstance(s, str)],
                 }
             )
@@ -541,7 +540,7 @@ def _ordered(story: dict) -> dict:
         }
     out["intros"] = [
         {k: it[k]
-         for k in ("id", "name", "prologue", "opening_scene", "play_guide", "suggestions")
+         for k in ("id", "name", "prologue", "opening_scene", "suggestions")
          if k in ("id", "name", "prologue") or it.get(k) not in ("", [], None)}
         for it in story["intros"]
     ]
@@ -695,7 +694,7 @@ def blank(name: str = "") -> dict:
         "style_prompt": "",
         "intros": [{
             "id": "start", "name": "Start", "prologue": "",
-            "opening_scene": "", "play_guide": "", "suggestions": [],
+            "opening_scene": "", "suggestions": [],
         }],
         "stats": [],
         "keywords": [],

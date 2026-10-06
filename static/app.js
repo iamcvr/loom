@@ -2361,7 +2361,7 @@ async function saveSettings() {
 // assistUndo lives here rather than on the button: renderEditor() rebuilds the button.
 const ED = { id: '', data: null, section: 'Story', isNew: true, idTouched: false, dirty: false,
              assistUndo: null };
-const ED_SECTIONS = ['Story', 'Intros', 'Stats', 'Keywords', 'Cast'];
+const ED_SECTIONS = ['Story', 'Openings', 'Stats', 'Keywords', 'Cast'];
 
 async function newStory() {
   ED.data = await api('/api/story/new');
@@ -2673,25 +2673,29 @@ function secStory(d) {
   return out;
 }
 
-function secIntros(d) {
+function secOpenings(d) {
   return [repeatable(d.intros, {
-    title: (it, i) => it.name || it.id || `Intro ${i + 1}`,
+    title: (it, i) => it.name || it.id || `Opening ${i + 1}`,
     add: '+ Add an opening',
     empty: 'Every story needs at least one opening.',
     minOne: true,
     blank: () => ({ id: 'opening-' + (d.intros.length + 1), name: '', prologue: '',
-                    opening_scene: '', play_guide: '', suggestions: [] }),
+                    opening_scene: '', suggestions: [] }),
     body: (it) => [
       row(field('Name', txt(it, 'name', 'Out of a Clear Sky'), { req: true }),
           field('Id', txt(it, 'id', 'out-of-a-clear-sky'), { req: true, cls: 'narrow' })),
-      field('Prologue', area(it, 'prologue', 9, 'The first thing the player reads.'),
+      // Named for who reads them, because that is the whole difference. The YAML keys
+      // (prologue, opening_scene) are unchanged so no story file breaks.
+      field('First page', area(it, 'prologue', 9, 'The first thing you read when you start.'),
         { req: true, count: true,
-          hint: 'Stored as the opening assistant turn — written as narration, not as setup.' }),
-      field('Opening scene', area(it, 'opening_scene', 5), {
-        hint: 'Context for the model about how things began. Sits inside the rules layer.',
-      }),
-      field('Play guide', area(it, 'play_guide', 3), {
-        hint: 'Shown to the player, never sent to the model.',
+          hint: 'Shown once, as the first message of the session. After that it is ordinary '
+              + 'transcript, and on a long story it eventually scrolls out of the '
+              + 'narrator\'s view \u2014 so anything it must never forget goes in the notes below.' }),
+      field('Narrator\'s secret notes', area(it, 'opening_scene', 5,
+        'What is true about how this began that the player does not know yet.'), {
+        hint: 'You never see these. The narrator reads them on every turn for the whole '
+            + 'story, which also means every word costs budget on every turn \u2014 keep '
+            + 'them to what actually shapes the story.',
       }),
       field('Suggested first moves', lineList(it, 'suggestions', 4,
         'One per line.\nThey appear as buttons under the composer.')),
@@ -2780,7 +2784,7 @@ function secCast(d) {
   ];
 }
 
-const ED_RENDER = { Story: secStory, Intros: secIntros, Stats: secStats,
+const ED_RENDER = { Story: secStory, Openings: secOpenings, Stats: secStats,
                     Keywords: secKeywords, Cast: secCast };
 
 function renderEditor() {
@@ -2791,7 +2795,7 @@ function renderEditor() {
   $('edDup').classList.toggle('hidden', ED.isNew);
   $('edDel').classList.toggle('hidden', ED.isNew);
 
-  const counts = { Story: null, Intros: d.intros.length, Stats: d.stats.length,
+  const counts = { Story: null, Openings: d.intros.length, Stats: d.stats.length,
                    Keywords: d.keywords.length, Cast: d.cast.length };
   const nav = $('edNav');
   nav.innerHTML = '';

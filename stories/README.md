@@ -34,7 +34,7 @@ The intended path for a story built from scratch. See
 
 ### 2. The built-in editor
 
-The boot screen → **＋**. Sections: Story / Intros / Stats /
+The boot screen → **＋**. Sections: Story / Openings / Stats /
 Keywords / Cast. **Check** runs full validation *and* the context-budget fit
 report without writing anything. **Save** writes `story.yaml` atomically and
 keeps the previous version as `story.yaml.bak`.
@@ -169,11 +169,9 @@ protagonist:                       # optional; presence makes the story
 intros:                            # one or more entry points
   - id: move_in_day                # unique within the story
     name: Move-in day              # shown on the intro picker
-    prologue: |                    # PLAYER-FACING. Stored as message 0.
+    prologue: |                    # "First page". PLAYER-FACING, shown once as message 0.
       ...
-    opening_scene: |               # MODEL-FACING. "## How this began"
-      ...
-    play_guide: |                  # PLAYER-FACING. How to play this story.
+    opening_scene: |               # "Narrator's secret notes". MODEL-ONLY, every turn.
       ...
     suggestions:                   # starter buttons under the composer
       - Side with Mika. The wall stays up.
@@ -215,14 +213,22 @@ lives.
 `## The world`. Same permanent cost. Anything that is not needed every turn
 belongs in `keywords` instead, where it fires only when relevant.
 
-**`opening_scene`** — third item in the same layer. It is the model's briefing
-on the situation the prologue just described: who is present, what time it is,
-what has and has not happened yet. Not player-facing.
+The two fields of an opening are easy to confuse, and the difference is entirely about
+**who reads them and for how long**. The editor labels them for that reason.
 
-**`prologue`** — written into the transcript as an assistant message at turn 0,
+**`prologue`** — *First page* in the editor. What the player reads when they sit down,
+shown once. It is written into the transcript as an assistant message at turn 0,
 with `{{tokens}}` already substituted. It is a real message: it can be edited in
 the UI afterwards, and changing the story file does not retroactively change a
-session that already started.
+session that already started. Because it is transcript, on a long story it eventually
+scrolls out of the narrator's view like any other turn.
+
+**`opening_scene`** — *Narrator's secret notes* in the editor. The player never sees it.
+It sits in the rules layer as "How this began", so the narrator reads it on **every turn
+for the whole story** — which is exactly what the prologue cannot do. Put here what must
+never be forgotten about how things started: who is present, what has and has not
+happened yet, what the player does not know. It is paid for on every turn, so keep it to
+what shapes the story.
 
 **`keywords`** — matched case-insensitively against the last
 `KEYWORD_SCAN_TURNS` (4) turns of transcript. Matches are ordered by *most

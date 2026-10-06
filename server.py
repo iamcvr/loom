@@ -78,7 +78,7 @@ def session_state(session_id: int) -> dict[str, Any]:
     try:
         intro = story_mod.intro(st, s["intro_id"])
     except story_mod.StoryError:
-        intro = {"suggestions": [], "play_guide": ""}
+        intro = {"suggestions": []}
     return {
         "session": s,
         "story": {"id": st["id"], "name": st["name"], "tagline": st["tagline"],
@@ -102,7 +102,6 @@ def session_state(session_id: int) -> dict[str, Any]:
             for m in store.media(session_id) if m["kind"] == "portrait"
         },
         "suggestions": [story_mod.subst(x, tok) for x in intro.get("suggestions", [])],
-        "play_guide": story_mod.subst(intro.get("play_guide", ""), tok),
         "protagonist": pro,
         "messages": store.messages(session_id),
         "stats": [
