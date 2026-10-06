@@ -588,7 +588,6 @@ function render(state) {
   renderLore();
   renderScene(state.media || []);
   if (document.activeElement !== $('notes')) $('notes').value = state.notes || '';
-  renderSuggestions();
 }
 
 /* Narrative mode: nobody is playing a character, so the composer stops being a
@@ -1458,18 +1457,6 @@ function renderScene(media) {
   paintScene();
 }
 
-function renderSuggestions() {
-  const w = $('suggestions');
-  w.innerHTML = '';
-  const msgs = S.state?.messages || [];
-  if (msgs.length !== 1) return;   // only on the opening beat
-  (S.state?.suggestions || window.__suggestions || []).forEach((t) => {
-    const b = el('button', null, t);
-    b.onclick = () => { $('input').value = t; w.innerHTML = ''; $('input').focus(); };
-    w.append(b);
-  });
-}
-
 /* ------------------------------------------------------------------ context */
 
 /* Measured latency, never a projection. Two numbers because they answer two
@@ -1535,7 +1522,6 @@ async function send(text, retryId, resumeId) {
   S.gotError = false;
   S.sawToken = false;
   $('send').disabled = true;
-  $('suggestions').innerHTML = '';
   $('status').textContent = 'thinking…';
   S.turnStart = Date.now();
 
@@ -2684,7 +2670,7 @@ function secOpenings(d) {
     empty: 'Every story needs at least one opening.',
     minOne: true,
     blank: () => ({ id: 'opening-' + (d.intros.length + 1), name: '', prologue: '',
-                    opening_scene: '', suggestions: [] }),
+                    opening_scene: '' }),
     body: (it) => [
       row(field('Name', txt(it, 'name', 'Out of a Clear Sky'), { req: true }),
           field('Id', txt(it, 'id', 'out-of-a-clear-sky'), { req: true, cls: 'narrow' })),
@@ -2709,8 +2695,6 @@ function secOpenings(d) {
             + 'story, which also means every word costs budget on every turn \u2014 keep '
             + 'them to what actually shapes the story.',
       }),
-      field('Suggested first moves', lineList(it, 'suggestions', 4,
-        'One per line.\nThey appear as buttons under the composer.')),
     ],
   })];
 }

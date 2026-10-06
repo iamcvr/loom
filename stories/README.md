@@ -173,8 +173,6 @@ intros:                            # one or more entry points
       ...
     opening_scene: |               # "Narrator's secret notes". MODEL-ONLY, every turn.
       ...
-    suggestions:                   # starter buttons under the composer
-      - Side with Mika. The wall stays up.
 
 stats:
   - key: yen                       # stable identifier; the delta extractor uses it
@@ -330,8 +328,6 @@ What changes:
   leads regard each other; goals become what the leads have committed to. Handled
   automatically, but it means your `cast` order matters: the first two entries
   are named to the extractor as the leads.
-- **`suggestions` become director prompts**, not player choices. *"Give them a
-  quiet passage"*, not *"Go north"*.
 
 ### The arc
 
@@ -478,7 +474,6 @@ file tells you everything wrong with it in one pass.
 - [ ] Every stat `description` says what moves the number, in both directions
 - [ ] `always: true` used on two or three notes, not eight
 - [ ] No keyword so generic it fires every turn (`man`, `city`, `door`)
-- [ ] `suggestions` are things a player would actually type, not menu options
 - [ ] Story appears on the boot screen with no error badge
 
 ---

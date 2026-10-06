@@ -72,13 +72,8 @@ def session_state(session_id: int) -> dict[str, Any]:
         return {}
     turn = int(s["turn"])
     st, pro = story_for(session_id, s)
-    tok = story_mod.tokens(pro)
     defs = {d["key"]: d for d in st.get("stats", [])}
     vals = store.stats(session_id)
-    try:
-        intro = story_mod.intro(st, s["intro_id"])
-    except story_mod.StoryError:
-        intro = {"suggestions": []}
     return {
         "session": s,
         "story": {"id": st["id"], "name": st["name"], "tagline": st["tagline"],
@@ -101,7 +96,6 @@ def session_state(session_id: int) -> dict[str, Any]:
             m["subject"]: images.portrait_prompt(session_id, m["subject"])
             for m in store.media(session_id) if m["kind"] == "portrait"
         },
-        "suggestions": [story_mod.subst(x, tok) for x in intro.get("suggestions", [])],
         "protagonist": pro,
         "messages": store.messages(session_id),
         "stats": [
