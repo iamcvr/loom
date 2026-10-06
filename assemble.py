@@ -95,17 +95,8 @@ def _items_core() -> list[str]:
     is actually its own \u2014 tone, world, cast \u2014 and cannot accidentally omit the rule
     that makes the player a player.
     """
-    out = []
     text = (config.CORE_RULES or "").strip()
-    if text:
-        out.append(text)
-    # Appended rather than folded into CORE_RULES so it can be turned off without
-    # editing the contract, and so the contract stays the same text for everyone.
-    if config.SPEAKER_LINES:
-        fmt = (config.SPEAKER_FORMAT or "").strip()
-        if fmt:
-            out.append(fmt)
-    return out
+    return [text] if text else []
 
 
 def _items_rules(story: dict, intro: dict) -> list[str]:

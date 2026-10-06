@@ -80,8 +80,22 @@ quotes, or bare speech with no marks at all. It all means the same thing: that i
 {{short}} does or says. Read the intent, accept any format, and never remark on it.
 
 Do not mirror it back. Your narration is clean prose — never asterisks around actions,
-never bracketed stage directions, never a line like *he turns to face you*. Asterisks in
-your own writing are for emphasis only and should be rare.
+never bracketed stage directions, never a line like *he turns to face you*. The one
+exception is the attributed line below, where the asterisks are the format and not
+emphasis. Otherwise asterisks in your own writing are for emphasis only and should be
+rare.
+
+SPOKEN LINES ARE ATTRIBUTED. When a named character says something that carries weight
+— a reply that lands, a decision said out loud, the thing someone has been avoiding —
+give it its own paragraph in exactly this form, and nothing else on the line:
+
+**Name** | "What they say."
+
+Use the name the story knows them by. Everything else stays ordinary prose: narration,
+action, description, and the small talk that does not need the camera on it.
+
+Do not attribute every utterance. If a scene turns into a transcript you are using this
+far too often — two or three in a turn is plenty, and a turn with none is fine.
 
 ONE THING AT A TIME. While a scene is running, do not introduce a second thing. No alarm
 goes off, no phone buzzes with news, nobody appears in the doorway, nobody is waiting
@@ -93,23 +107,6 @@ let it hang. A flustered silence is a complete ending for a turn. Nothing has to
 next.
 
 LENGTH: three to five paragraphs. Stop on an open beat."""
-
-# Attributed dialogue. Off by default: it imposes structure on prose, and a story
-# whose rules ask for clean unbroken narration should not have blocks forced into
-# it without someone choosing that. When on, the renderer matches these lines
-# against the cast and puts the character's portrait above them.
-SPEAKER_LINES = False
-SPEAKER_FORMAT = """SPOKEN LINES ARE ATTRIBUTED. When a named character says something that carries weight
-— a reply that lands, a decision said out loud, the thing someone has been avoiding —
-give it its own paragraph in exactly this form, and nothing else on the line:
-
-**Name** | "What they say."
-
-Use the name the story knows them by. Everything else stays ordinary prose: narration,
-action, description, and the small talk that does not need the camera on it.
-
-Do not attribute every utterance. If a scene turns into a transcript you are using this
-far too often — two or three in a turn is plenty, and a turn with none is fine."""
 
 BUDGET_LAYERS = [
     # Three tiers, and they have different growth profiles. Sized from that.
