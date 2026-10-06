@@ -615,6 +615,26 @@ function portraitFor(name) {
 /* Paragraph by paragraph, so an attributed line can become its own block. A line
    whose speaker has no portrait yet still renders as an attributed line -- the
    format is useful on its own and the image is an enrichment, not a requirement. */
+/* Mid-stream rendering. Everything before the last blank line is complete and gets
+   the full treatment, portraits and all; the tail is still arriving, so it stays
+   plain text until its own paragraph closes.
+
+   Without this the speaker blocks formed only once the whole turn was done -- and
+   not even when the prose finished, but after the state extraction and ledger pass
+   that follow it. */
+function renderStreamingBody(body, text) {
+  const ix = text.lastIndexOf('\n\n');
+  if (ix < 0) { formatInto(body, text); return; }
+  renderBody(body, text.slice(0, ix));
+  const tail = text.slice(ix + 2);
+  if (tail) {
+    const p = el('p', 'para');
+    formatInto(p, tail);
+    body.append(p);
+  }
+  body.dataset.raw = text;
+}
+
 function renderBody(body, text) {
   body.dataset.raw = text;
   body.textContent = '';
@@ -1473,10 +1493,20 @@ async function send(text, retryId, resumeId) {
           const box = $('messages');
           const stick = atBottom(box);
           raw += data;
-          // Re-render only when an asterisk is involved; otherwise just append,
-          // so a long reply is not rebuilt hundreds of times.
-          if (data.includes('*')) formatInto(body, raw);
-          else { body.append(document.createTextNode(data)); body.dataset.raw = raw; }
+          // Rebuild on a newline or an asterisk, the two things that can change the
+          // shape. Otherwise append to the open paragraph, so a long reply is not
+          // rebuilt hundreds of times.
+          if (data.includes('\n') || data.includes('*')) {
+            renderStreamingBody(body, raw);
+          } else {
+            const open = body.lastElementChild;
+            if (open && open.classList.contains('para')) {
+              open.append(document.createTextNode(data));
+            } else {
+              body.append(document.createTextNode(data));
+            }
+            body.dataset.raw = raw;
+          }
           if (stick) toBottom(box); else updateLatestButton();
         }
         else if (ev === 'context') { renderContext(data); }
@@ -1498,7 +1528,11 @@ async function send(text, retryId, resumeId) {
           // A resume returns the whole merged reply, so re-render from that
           // rather than trusting the tokens we happened to append — the join is
           // the server's, and this is the version that is actually on disk.
-          if (data.replaced) { raw = data.content; renderBody(body, raw); }
+          // The reply is complete and stored, so render it properly now rather than
+          // waiting for the state event, which lands after extraction and the ledger
+          // pass several seconds further on.
+          if (data.replaced) raw = data.content;
+          renderBody(body, raw);
         }
         else if (ev === 'chapter') { chapterClosed(data); }
         else if (ev === 'state') {

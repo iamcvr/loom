@@ -737,7 +737,9 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
   cursor: zoom-in; display: block; margin: 0;
 }
 .speakLine { flex: 1; min-width: 0; line-height: 1.6; }
-.speakWho { font-weight: 700; }
+/* Same accent the name carries while it is still streaming as plain **bold**, so
+   it does not change colour when the block forms around it. */
+.speakWho { font-weight: 700; color: var(--accent); }
 .speakWho::after { content: ' | '; font-weight: 400; opacity: .45; }
 .para { margin: 0 0 1em; }
 .para:last-child { margin-bottom: 0; }
