@@ -594,21 +594,18 @@ function portraitFor(name) {
   //
   // Both sources are searched: portraits generated during play, and the story's own
   // cast portraits, which exist before any turn has been taken.
-  const want = name.trim().toLowerCase();
+  const want = canonName(S.state, name);
+  if (!want) return null;
   const pool = [
     ...(S.state?.media || [])
       .filter((x) => x.kind === 'portrait')
-      .map((x) => ({ subject: x.subject, url: '/media/' + x.path })),
+      .map((x) => ({ subject: canonName(S.state, x.subject), url: '/media/' + x.path })),
     ...(S.state?.cast || [])
       .filter((c) => c.portrait)
       .map((c) => ({ subject: c.name, url: c.portrait })),
   ];
-  const by = (fn) => pool.filter(fn);
-  const hits = by((x) => x.subject === name.trim());
-  const ci = hits.length ? hits : by((x) => (x.subject || '').toLowerCase() === want);
-  const first = ci.length ? ci
-    : by((x) => (x.subject || '').toLowerCase().split(/\s+/)[0] === want);
-  return first.length ? first[first.length - 1].url : null;
+  const hits = pool.filter((x) => x.subject === want);
+  return hits.length ? hits[hits.length - 1].url : null;
 }
 
 
@@ -854,24 +851,48 @@ async function setGoal(id, status) {
 
 /* One list of who exists, built once and used by both the side panel and the
    expanded pane, so the two can never disagree about who is on stage. */
+/* One canonical name for a person, however they were referred to.
+
+   The story's cast is "John James". The narration calls him John, the extractor
+   files a relationship under John, and a portrait is filed under John James -- so a
+   plain union of those sources lists one man twice. Everything that groups by
+   person resolves through here first. */
+function canonName(state, name) {
+  const want = (name || '').trim().toLowerCase();
+  if (!want) return '';
+  const cast = state?.cast || [];
+  const hit =
+    cast.find((c) => (c.name || '').toLowerCase() === want)
+    || cast.find((c) => (c.short || '').toLowerCase() === want
+                     || (c.aliases || []).some((a) => (a || '').toLowerCase() === want))
+    || cast.find((c) => (c.name || '').toLowerCase().split(/\s+/)[0] === want);
+  return hit ? hit.name : (name || '').trim();
+}
+
 function castRoster(state) {
-  // Session portraits: generated during play, keyed by subject.
+  const canon = (n) => canonName(state, n);
+
+  // The player is in state.cast because story_for() merges them in for the state
+  // extractor and the portrait queue, which both need to know the player exists.
+  // The panel is not one of those: they already have their own section above it,
+  // and listing them again as a cast member reads as a second person in the room.
+  const me = (state.protagonist?.name || '').trim();
+
   const shot = {};
   (state.media || []).filter((m) => m.kind === 'portrait')
-    .forEach((m) => { if (!shot[m.subject]) shot[m.subject] = '/media/' + m.path; });
+    .forEach((m) => { const k = canon(m.subject); if (!shot[k]) shot[k] = '/media/' + m.path; });
 
-  // The story's own cast, which exists before the first turn does. Without this the
-  // panel stayed empty until something had happened, even though the characters had
-  // been written and drawn already.
   const story = {};
   (state.cast || []).forEach((c) => { if (c.portrait) story[c.name] = c.portrait; });
 
-  const rels = Object.fromEntries((state.relationships || []).map((r) => [r.name, r.summary]));
+  const rels = {};
+  (state.relationships || []).forEach((r) => { rels[canon(r.name)] = r.summary; });
   const shorts = Object.fromEntries((state.cast || []).map((c) => [c.name, c.short]));
+
   const names = [...new Set([
     ...(state.cast || []).map((c) => c.name),
     ...Object.keys(rels), ...Object.keys(shot),
-  ])].filter(Boolean);
+  ])].filter((n) => n && n !== me);
 
   return names.map((name) => ({
     name,
