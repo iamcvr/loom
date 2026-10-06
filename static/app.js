@@ -523,10 +523,20 @@ function formatInto(node, text) {
 const SPEAKER_RE = /^\*\*([^*\n]{1,60}?)\*\*\s*\|\s*([\s\S]+)$/;
 
 function portraitFor(name) {
-  const hits = (S.state?.media || [])
-    .filter((x) => x.kind === 'portrait' && x.subject === name);
-  return hits.length ? '/media/' + hits[hits.length - 1].path : null;
+  // Dialogue uses the name people actually say -- "John" -- while the cast entry and
+  // therefore the portrait is filed under "John James". Exact, then case-insensitive,
+  // then first name. Without the fallback every attributed line would have to spell
+  // out a full name, and nobody speaks like that.
+  const shots = (S.state?.media || []).filter((x) => x.kind === 'portrait');
+  const want = name.trim().toLowerCase();
+  const by = (fn) => shots.filter(fn);
+  const hits = by((x) => x.subject === name.trim());
+  const ci   = hits.length ? hits : by((x) => (x.subject || '').toLowerCase() === want);
+  const first = ci.length ? ci
+    : by((x) => (x.subject || '').toLowerCase().split(/\s+/)[0] === want);
+  return first.length ? '/media/' + first[first.length - 1].path : null;
 }
+
 
 /* Paragraph by paragraph, so an attributed line can become its own block. A line
    whose speaker has no portrait yet still renders as an attributed line -- the
