@@ -1,88 +1,108 @@
 """Per-field help: say it roughly, get it back written for the engine.
 
-The editor asks for several blocks of prose, each with its own job and its own
-failure mode, and nothing on the screen says what a good one looks like. So each
-field gets a button: write what you mean however you like, and this rewrites it into
-the shape the narrator actually reads well.
+The editor asks for several blocks of prose, each with its own job, and nothing on the
+screen says what a good one looks like. So each field gets a button: write what you
+mean however you like -- a line or a page -- and this rewrites it into the shape the
+narrator reads well.
 
-It is deliberately per-field rather than one "write my story" button. Each field is a
-different task with different rules -- `details` wants facts and no instructions,
-`rules` wants instructions and no facts -- and a single prompt covering all of them
-does each one worse.
+Per-field rather than one "write my story" button, because each field is a different
+job: `details` wants facts and no instructions, `rules` wants instructions and no
+facts, and one prompt covering both does each worse.
 
-What comes back REPLACES the field in an unsaved editor. Nothing here writes to disk.
+GENERATED AS PROSE, through the same brain.prose() path story turns use. The first
+version asked for a JSON array of paragraph strings, and inside a JSON string the
+model never reaches a natural end: it wrote until the token cap cut the JSON in half,
+then -- with the cap removed -- until a per-string maxLength cut sentences in two, and
+whatever ceiling was set became the length. Prose stops when the thought ends, the
+way every turn already does. It also runs at PROSE's num_ctx, so calling it between
+turns cannot make ollama reload the model at a different context size.
+
+What comes back REPLACES the field in an unsaved editor, with an Undo beside it.
+Nothing here writes to disk.
 """
 from __future__ import annotations
 
-from typing import Any
+import re
 
 import brain
 import config
 
-def _schema(lo: int, hi: int) -> dict[str, Any]:
-    """Paragraphs as an ARRAY, joined afterwards -- not one string.
-
-    Asking in the prompt for four to eight paragraphs separated by blank lines
-    produced one block, twice, including when the instruction was in capitals. The
-    schema is the only part of this the model reliably obeys: an array with minItems
-    cannot come back as a single paragraph. Same lesson as requiring lorebook entries
-    rather than asking for them.
-    """
-    return {
-        "type": "object",
-        "properties": {
-            "paragraphs": {"type": "array", "minItems": lo, "maxItems": hi,
-                           "items": {"type": "string"}},
-        },
-        "required": ["paragraphs"],
-    }
-
-# Shared by every field, because the most common failure is a block that repeats what
-# the engine already says or what another field already covers.
 _FRAME = """You are helping someone write one field of an interactive-fiction story
-file. Rewrite what they have into something the narrator will read well. Keep their
-intent, their names and their specifics exactly; improve the shape, not the substance.
+file. They will play in this story; a narrator model reads this field to run it. Rewrite
+what they have written into what that narrator will use best. Keep their intent, their
+names and their specifics; improve the shape, not the substance.
 
 The engine already instructs the narrator separately on player agency, input formats,
-clean prose, scene pacing, turn length and the attributed-dialogue format. Never write
-any of that here.
+clean prose, scene pacing, turn length and how dialogue is attributed. Never write any of
+that here.
 
-Return only the field's new contents. No preamble, no explanation, no markdown fences."""
+Reply with the field's new contents and nothing else -- no preamble, no heading, no
+commentary, no markdown."""
 
 FIELDS: dict[str, dict] = {
     "details": {
         "label": "World details",
-        # Three to five. At six it produced 4,345 characters on a sparse world and
-        # ran past max_tokens on a rich one, which truncates the JSON mid-string and
-        # fails as "returned non-JSON" -- a parse error that looks like a model fault
-        # and is really a budget one. `rules` + `details` + the opening scene also
-        # share an 11,000-character ceiling.
-        "paragraphs": (3, 5),
-        "guide": """This field is WHAT IS TRUE about the world. Facts the narrator needs
-in order not to contradict itself: the place, the era, how things work, who holds
-power, what is normal here and what is not. It is read on every single turn.
+        "guide": """This field is WHAT IS TRUE about the world: the facts the narrator needs
+so it never contradicts itself -- the place, the era, how things work, who holds what,
+what is normal here and what is not. It is read on every turn, so every sentence in it is
+paid for on every turn.
 
-It is NOT instructions to the narrator -- no "be funny", no "keep scenes short". Those
-belong in the rules and will be ignored or will fight with them here.
+Do this:
+- Keep every fact, place, name and specific they gave you. Drop nothing, change nothing.
+- Collapse repetition. Something said three ways should be said once, well.
+- Group related facts into paragraphs -- the place itself, how the world works, ordinary
+  life in it.
+- Add a few concrete specifics that FOLLOW from what they wrote and that a scene could be
+  built from. "A Miami suburb" becomes particular streets, buildings, routines. Only
+  consequences of their premise; never a new premise of your own.
+- If they wrote only a line or two, build outward from it in the same way.
 
-Make it concrete. "A port town" is worth nothing; "a port town of four thousand, two
-canneries, one of them closed since the spring" is worth a great deal, because every
-one of those details is something a scene can be built from. Prefer specifics that
-generate scenes over adjectives that describe a mood.
-
-DO NOT INVENT NAMED PEOPLE. The cast is its own field and inventing names here
-creates characters the story does not know about, which the narrator will then
-contradict. Describe roles and groups -- "three boatbuilders", "the harbourmaster" --
-never "Marcus, who has been doing it since he was sixteen".
-
-Each paragraph is a separate item of TWO TO FOUR sentences, on one aspect of the
-world. 700-1,600 characters across all of them -- this is a field the narrator reads
-on every turn, so density matters more than completeness. If they gave you two sentences,
-expand by adding the concrete consequences of what they said, never by padding.
-
-Plain prose. No headings, no bullet lists.""",
+Never:
+- Instructions to the narrator ("keep it light", "scenes should..."). Those belong in the
+  rules, and here they fight with them.
+- Named people. The cast is its own field; a name invented here is a character the story
+  does not know about. Describe roles and groups instead.
+- Headings, lists, or bold text.""",
     },
 }
+
+
+def _target(n: int) -> int:
+    """Length to aim for, relative to what they gave.
+
+    One-and-a-half times their own text, so a single line is expanded and a dense
+    paragraph is tightened rather than inflated -- the second version of this asked for
+    a fixed paragraph count and turned 600 good characters into 4,400. Floored so a
+    one-liner has room to become something, capped because this field is paid for on
+    every turn and shares an 11,000-character ceiling with the rules and the opening.
+    """
+    if n <= 0:
+        return 900
+    return max(600, min(1500, round(n * 1.5)))
+
+
+_PREAMBLE = re.compile(
+    r"^\s*(here('s| is| are)|sure|certainly|okay|ok|rewritten|revised|world details)\b[^\n]*\n+",
+    re.IGNORECASE)
+
+
+def _clean(text: str, stopped: str) -> str:
+    """Strip what a chat model wraps around an answer, and never return half a sentence."""
+    t = text.strip()
+    t = re.sub(r"^```[a-z]*\s*|\s*```$", "", t).strip()       # stray fences
+    t = _PREAMBLE.sub("", t, count=1).strip()                  # "Here's the rewrite:"
+    if len(t) > 1 and t[0] == t[-1] and t[0] in "\"'":         # quoted whole
+        t = t[1:-1].strip()
+    t = re.sub(r"\*\*([^*]+)\*\*", r"\1", t)                   # bold it was told not to use
+    t = re.sub(r"[ \t]+\n", "\n", t)
+    t = re.sub(r"\n{3,}", "\n\n", t)
+    # Only if it ran into the reply ceiling. In prose that costs the tail of one
+    # sentence, which is trimmed -- unlike JSON, where it cost the whole call.
+    if stopped == "max_tokens":
+        cut = max(t.rfind(". "), t.rfind(".\n"), t.rfind("! "), t.rfind("? "))
+        if t.rstrip()[-1:] not in ".!?\"'" and cut > len(t) // 2:
+            t = t[:cut + 1]
+    return t.strip()
 
 
 def improve(field: str, text: str, story: dict | None = None) -> str:
@@ -97,27 +117,29 @@ def improve(field: str, text: str, story: dict | None = None) -> str:
         ctx.append(f"The story is called {story['name']}.")
     if story.get("tagline"):
         ctx.append(f"Its tagline: {story['tagline']}")
-    # The rules are the single most useful context: they establish register and
-    # content, and this field must not contradict or repeat them.
+    # The rules set register and content, and this field must not repeat or fight them.
     if story.get("rules"):
         ctx.append("Its rules, which you must not repeat or contradict:\n"
                    + story["rules"].strip()[:3000])
 
-    prompt = "\n\n".join([
+    mine = (text or "").strip()
+    target = _target(len(mine))
+    paras = max(2, min(5, round(target / 350)))
+    system = "\n\n".join([
         _FRAME,
         f"THE FIELD: {spec['label']}",
         spec["guide"],
+        f"LENGTH: about {target} characters, in {paras} short paragraphs separated by "
+        f"blank lines.",
         "\n".join(ctx) if ctx else "(no other fields written yet)",
-        "WHAT THEY HAVE WRITTEN SO FAR:\n" + (text.strip() or "(empty -- write it from "
-                                              "the story's name, tagline and rules)"),
     ])
-    lo, hi = spec.get("paragraphs", (3, 8))
-    # No token cap. There is nothing for one to do here that is not already done
-    # better by something else: the schema fixes the number of paragraphs, and
-    # num_ctx bounds the total. A cap on top of those cannot shorten the prose -- it
-    # can only stop mid-string and destroy the JSON carrying it, which is exactly
-    # what 1500 did. -1 is ollama for "until you are finished".
-    out = brain.utility(prompt, _schema(lo, hi),
-                        spec={**config.UTILITY, "max_tokens": -1}, timeout=300)
-    paras = [str(x).strip() for x in (out.get("paragraphs") or []) if str(x).strip()]
-    return "\n\n".join(paras)
+    ask = ("Here is what I have for this field:\n\n" + mine + "\n\nRewrite it.") if mine \
+        else "I have not written this field yet. Write it from the story's name, tagline and rules."
+
+    stop: list[str] = []
+    # The story-turn spec, so it shares the loaded model's context size, with the
+    # temperature lowered: this is a rewrite of their facts, not invention.
+    out = brain.prose(system, [{"role": "user", "content": ask}],
+                      spec={**config.PROSE, "temperature": 0.7},
+                      on_stop=stop.append)
+    return _clean(out, stop[-1] if stop else "stop")

@@ -870,6 +870,7 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
 
 .assistRow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .assistNote { min-width: 0; }
+.assistUndo { color: var(--accent); cursor: pointer; text-decoration: underline; }
 
 #btnSettings2 { display: none; }
 .advisor { display: none; }

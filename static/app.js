@@ -2358,7 +2358,9 @@ async function saveSettings() {
 
 /* ------------------------------------------------------------------ editor */
 
-const ED = { id: '', data: null, section: 'Story', isNew: true, idTouched: false, dirty: false };
+// assistUndo lives here rather than on the button: renderEditor() rebuilds the button.
+const ED = { id: '', data: null, section: 'Story', isNew: true, idTouched: false, dirty: false,
+             assistUndo: null };
 const ED_SECTIONS = ['Story', 'Intros', 'Stats', 'Keywords', 'Cast'];
 
 async function newStory() {
@@ -2368,6 +2370,7 @@ async function newStory() {
   ED.idTouched = false;
   ED.dirty = false;
   ED.section = 'Story';
+  ED.assistUndo = null;
   showEditor();
 }
 
@@ -2378,6 +2381,7 @@ async function editStory(id) {
   ED.idTouched = true;
   ED.dirty = false;
   ED.section = 'Story';
+  ED.assistUndo = null;
   showEditor();
   if (ED.data._problems?.length) showProblems(ED.data._problems);
 }
@@ -2880,6 +2884,24 @@ function setCastShot(slot, url, name) {
 function assistButton(fieldName, label, d, hint) {
   const btn = el('button', 'ghost', label);
   const note = el('span', 'muted small assistNote');
+
+  // The previous text survives the re-render on ED, so the rewrite can be taken back
+  // without discarding every other unsaved edit along with it.
+  const undo = ED.assistUndo && ED.assistUndo.field === fieldName ? ED.assistUndo : null;
+  if (undo) {
+    note.append('Rewritten. ');
+    const back = el('a', 'assistUndo', 'Undo');
+    back.href = '#';
+    back.onclick = (e) => {
+      e.preventDefault();
+      d[fieldName] = undo.text;
+      ED.assistUndo = null;
+      touch();
+      renderEditor();
+    };
+    note.append(back);
+  }
+
   btn.onclick = async () => {
     btn.disabled = true;
     let secs = 0;
@@ -2894,12 +2916,13 @@ function assistButton(fieldName, label, d, hint) {
       });
       clearInterval(tick);
       if (r.text) {
+        ED.assistUndo = { field: fieldName, text: d[fieldName] || '' };
         d[fieldName] = r.text;
         touch();
         renderEditor();
-      } else {
-        note.textContent = 'nothing came back';
+        return;
       }
+      note.textContent = 'nothing came back';
     } catch (e) {
       clearInterval(tick);
       note.textContent = e.message;
@@ -2989,6 +3012,7 @@ async function saveStory() {
     ED.id = r.id;
     ED.isNew = false;
     ED.dirty = false;
+    ED.assistUndo = null;      // saved: there is nothing to go back to
     $('edStatus').textContent = 'saved';
     const v = await api('/api/story/validate', edPayload()).catch(() => null);
     showProblems([], true, v && v.fit);
