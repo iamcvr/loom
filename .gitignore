@@ -18,6 +18,7 @@ loom-state/
 # see what a finished one looks like, which no amount of documentation replaces.
 stories/*
 !stories/README.md
+!stories/INTERVIEW.md
 !stories/seiran
 !stories/seiran/story.yaml
 # Generated art is derived data and large -- 1.6MB a face across a cast of fifteen.
