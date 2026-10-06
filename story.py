@@ -263,6 +263,11 @@ def _validate(raw: Any, story_id: str) -> tuple[dict, list[str]]:
                     })
             story["arc"] = {"advance": advance, "acts": acts}
 
+    # Whether this world has named powers, and what it calls them — "Quirk",
+    # "Semblance", "the Gift". A property of the world rather than of whoever is
+    # playing in it: a swords-and-no-magic story should never raise the subject,
+    # and the character sheet hides its ability fields entirely when this is empty.
+    story["power_label"] = (raw.get("power_label", "") or "").strip()
     story["style_prompt"] = raw.get("style_prompt", "") or ""
     # Which ComfyUI checkpoint renders this story. Empty falls back to
     # config.COMFY_CHECKPOINT. A booru-tag anime model and a photoreal one
@@ -510,8 +515,8 @@ def _ordered(story: dict) -> dict:
         "tagline": story.get("tagline", ""),
         "rules": story["rules"],
     }
-    for key in ("details", "style_prompt", "checkpoint", "quality_prompt",
-                "negative_prompt", "title_image"):
+    for key in ("details", "power_label", "style_prompt", "checkpoint",
+                "quality_prompt", "negative_prompt", "title_image"):
         if story.get(key):
             out[key] = story[key]
     if story.get("mode") and story["mode"] != "play":
@@ -681,6 +686,7 @@ def blank(name: str = "") -> dict:
     return {
         "name": name,
         "tagline": "",
+        "power_label": "",
         "rules": "",
         "details": "",
         "style_prompt": "",

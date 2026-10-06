@@ -512,6 +512,8 @@ class Handler(BaseHTTPRequestHandler):
                 # more — and a story without one still gets whatever the player
                 # typed, which it previously discarded.
                 defaults = story_mod.protagonist_defaults(st) or {}
+                if st.get("power_label") and not defaults.get("power_label"):
+                    defaults["power_label"] = st["power_label"]
                 submitted = body.get("protagonist") or {}
                 pro = None
                 if defaults or submitted:

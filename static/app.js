@@ -185,7 +185,9 @@ async function start(storyId) {
   // has somebody in it -- the same story played twice can be two different
   // people, the way it works in any other game. A story's protagonist block,
   // where it has one, only pre-fills the form.
-  openPC({ storyId, defaults: story?.protagonist || null });
+  const pcDefaults = { ...(story?.protagonist || {}) };
+  if (story?.power_label && !pcDefaults.power_label) pcDefaults.power_label = story.power_label;
+  openPC({ storyId, defaults: Object.keys(pcDefaults).length ? pcDefaults : null });
 }
 
 /* ------------------------------------------------------------------ the player
@@ -2291,6 +2293,32 @@ function secStory(d) {
     count: true,
     hint: 'Also always present. Split anything that only matters sometimes into ' +
           'a keyword note instead, so it costs budget only when relevant.',
+  }));
+
+  // A world either has named powers or it does not. Off by default, because a
+  // story with swords and no magic should never raise the subject -- and a field
+  // that is always on the screen teaches whoever is filling it in that they are
+  // supposed to have an answer.
+  const powWrap = el('div', 'pcRow');
+  const powOn = el('input');
+  powOn.type = 'checkbox';
+  powOn.checked = !!d.power_label;
+  const powName = el('input');
+  powName.type = 'text';
+  powName.placeholder = 'Quirk, Semblance, the Gift\u2026';
+  powName.value = d.power_label || '';
+  powName.classList.toggle('hidden', !powOn.checked);
+  powOn.onchange = () => {
+    powName.classList.toggle('hidden', !powOn.checked);
+    if (!powOn.checked) { powName.value = ''; d.power_label = ''; }
+    else powName.focus();
+    touch();
+  };
+  powName.oninput = () => { d.power_label = powName.value; touch(); };
+  powWrap.append(powOn, powName);
+  out.push(field('People here have named powers', powWrap, {
+    hint: 'What this world calls them. Leave it off and the character sheet never '
+        + 'asks for an ability at all.',
   }));
 
   out.push(field('Image style', txt(d, 'style_prompt', 'oil painting, muted palette'), {
