@@ -90,6 +90,21 @@ KNOBS: list[dict] = [
       "shortest left it out entirely. Its budget floor matches its length, so the "
       "arbiter can never cut it.",
       rows=18),
+    K("SPEAKER_LINES", "bool", "Story rules", "Attribute spoken lines",
+      "Asks the narrator to give weighty spoken lines their own paragraph as "
+      "**Name** | \"what they say\", and shows the character's portrait above each "
+      "one. Off by default because it imposes structure on prose: a story whose "
+      "rules ask for clean unbroken narration should not have blocks forced into it "
+      "unless you choose that. Needs portraits to be worth much, so it pairs with "
+      "image generation being on."),
+    K("SPEAKER_FORMAT", "text", "Story rules", "How spoken lines are asked for",
+      "The instruction added to the rules when the setting above is on. It defines "
+      "the exact form the renderer looks for, so changing the shape of the line "
+      "here without changing the renderer will stop portraits appearing. The rest "
+      "of it is craft guidance \u2014 mainly telling the narrator NOT to attribute "
+      "every utterance, because a scene that attributes everything reads as a "
+      "transcript rather than as prose.",
+      rows=12),
     K("BUDGET_LAYERS", "layers", "Context budget", "Layer floors and ceilings",
       "Priority order, top to bottom — the arbiter fills each layer in turn. A layer "
       "always gets its floor; it grows toward its ceiling only if budget remains. "

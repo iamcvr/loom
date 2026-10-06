@@ -517,6 +517,54 @@ function formatInto(node, text) {
   if (last < text.length) node.append(document.createTextNode(text.slice(last)));
 }
 
+/* A spoken line the narrator attributed, shown with the speaker's portrait above it.
+   The shape is fixed by config.SPEAKER_FORMAT, which is what asks the model for it --
+   change one without the other and the portraits stop appearing. */
+const SPEAKER_RE = /^\*\*([^*\n]{1,60}?)\*\*\s*\|\s*([\s\S]+)$/;
+
+function portraitFor(name) {
+  const hits = (S.state?.media || [])
+    .filter((x) => x.kind === 'portrait' && x.subject === name);
+  return hits.length ? '/media/' + hits[hits.length - 1].path : null;
+}
+
+/* Paragraph by paragraph, so an attributed line can become its own block. A line
+   whose speaker has no portrait yet still renders as an attributed line -- the
+   format is useful on its own and the image is an enrichment, not a requirement. */
+function renderBody(body, text) {
+  body.dataset.raw = text;
+  body.textContent = '';
+  (text || '').split(/\n\n+/).forEach((para) => {
+    const t = para.trim();
+    if (!t) return;
+    const m = t.match(SPEAKER_RE);
+    if (!m) {
+      const p = el('p', 'para');
+      formatInto(p, para);
+      body.append(p);
+      return;
+    }
+    const who = m[1].trim();
+    const block = el('div', 'speak');
+    const shot = portraitFor(who);
+    if (shot) {
+      const img = el('img');
+      img.src = shot;
+      img.alt = who;
+      img.title = 'View full size';
+      img.onclick = () => lightbox(shot, who);
+      block.append(img);
+    }
+    const line = el('div', 'speakLine');
+    line.append(el('strong', 'speakWho', who));
+    const said = el('span', 'speakSaid');
+    formatInto(said, m[2].trim());
+    line.append(said);
+    block.append(line);
+    body.append(block);
+  });
+}
+
 function messageNode(m) {
   const n = el('div', 'msg ' + m.role);
   n.dataset.id = m.id;
@@ -525,7 +573,7 @@ function messageNode(m) {
     : (S.state?.story?.name || 'Narrator');
   n.append(el('div', 'who', who));
   const body = el('div', 'body');
-  formatInto(body, m.content);
+  renderBody(body, m.content);
   n.append(body);
 
   const tools = el('div', 'tools');
@@ -537,7 +585,7 @@ function messageNode(m) {
     if (on) {
       const text = body.textContent;
       api('/api/message', { id: m.id, content: text });
-      formatInto(body, text);          // back to rendered
+      renderBody(body, text);          // back to rendered
     } else {
       body.textContent = body.dataset.raw || body.textContent;   // show the source
       body.focus();
@@ -1339,7 +1387,7 @@ async function send(text, retryId, resumeId) {
           // A resume returns the whole merged reply, so re-render from that
           // rather than trusting the tokens we happened to append — the join is
           // the server's, and this is the version that is actually on disk.
-          if (data.replaced) { raw = data.content; formatInto(body, raw); body.dataset.raw = raw; }
+          if (data.replaced) { raw = data.content; renderBody(body, raw); }
         }
         else if (ev === 'chapter') { chapterClosed(data); }
         else if (ev === 'state') {
@@ -1361,6 +1409,10 @@ async function send(text, retryId, resumeId) {
         }
       }
     }
+    // Blocks are built once, here. During streaming the body is appended to as
+    // plain text, because a half-arrived '**Chloe** | "...' would flicker into a
+    // speaker block and back out again on the very next token.
+    if (raw && !S.gotError) renderBody(body, raw);
     if (!S.gotMessage && !S.gotError) await recoverTurn(live, null, resumeId);
     if (S.gotError && !resuming) live.remove();
   } catch (e) {

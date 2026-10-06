@@ -716,6 +716,20 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
 .rbOpt.on { border-color: var(--accent); color: var(--fg); background: var(--bg3); }
 @media (max-width: 860px) { .rulesBody { grid-template-columns: 1fr; } }
 
+/* An attributed spoken line: the speaker's portrait, then the line itself. The
+   portrait is an enrichment -- a speaker without one still gets the attributed
+   line, because the format earns its place on its own. */
+.speak { margin: 18px 0; }
+.speak img {
+  display: block; width: 100%; max-width: 520px; border-radius: var(--radius);
+  border: 1px solid var(--line); cursor: zoom-in; margin-bottom: 10px;
+}
+.speakLine { line-height: 1.6; }
+.speakWho { font-weight: 700; }
+.speakWho::after { content: ' | '; font-weight: 400; opacity: .45; }
+.para { margin: 0 0 1em; }
+.para:last-child { margin-bottom: 0; }
+
 .advisor { position: fixed; left: 14px; bottom: 14px; z-index: 60; }
 .advisor.collapsed .advisePanel { display: none; }
 .advisor:not(.collapsed) .adviseBubble { display: none; }
