@@ -738,6 +738,13 @@ class Handler(BaseHTTPRequestHandler):
                     str(body.get("field") or ""),
                     str(body.get("text") or ""),
                     body.get("story") or {})})
+            elif path == "/api/assist/keywords":
+                # Proposals only. The editor shows them as cards; accepting one adds
+                # it to the unsaved story, and nothing is written until Save.
+                self._json({"notes": assist.keyword_notes(
+                    body.get("story") or {},
+                    "more" if body.get("mode") == "more" else "first",
+                    body.get("seen") or [])})
             elif path == "/api/rulebuilder":
                 # Generated server-side rather than in the browser, although the
                 # browser already has every fragment. build() enforces the one

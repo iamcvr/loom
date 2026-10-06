@@ -245,3 +245,164 @@ def improve(field: str, text: str, story: dict | None = None) -> str:
                       spec={**config.PROSE, "temperature": 0.7},
                       on_stop=stop.append)
     return _clean(out, stop[-1] if stop else "stop", spec.get("keep_bold", False))
+
+
+# ---------------------------------------------------------------- keyword notes
+#
+# Not a field rewrite: this proposes whole notes, which the author accepts or
+# dismisses one at a time. Still generated as prose, in a plain delimited format,
+# for the same reason the fields are -- a JSON body string runs until a bound stops
+# it. Bodies are short and the count is fixed, so this ends on its own.
+
+_KW_FRAME = """You are helping someone build the lorebook for an interactive-fiction story.
+
+A keyword note is reference material for the narrator. It enters the narrator's context
+only on turns where one of its triggers appears in the recent text, so it costs nothing
+when it is not needed. This is where the bulk of a world belongs: people, places, groups,
+kinds of creature, institutions, customs, how something works.
+
+Each note:
+- Title: the thing's name, 1-4 words, spelled exactly as the story spells it.
+- Triggers: 2-4 lowercase words or phrases that would appear in prose when this thing
+  comes up. Include the name. Triggers are matched as plain text INSIDE other words, so
+  avoid short ones that hide in common words ("orc" fires on "force" and "torch" --
+  write "orcs", "orcish"), and never generic ones like "man", "city", "house", "money".
+- Body: 2-5 sentences of plain fact, present tense, written for the narrator. Who or
+  what it is, what it is like, what it wants or how it works. No instructions about
+  tone, no plot, nothing that has to happen.
+
+Reply with the notes only, each in exactly this form, nothing before or after:
+
+=== Title
+from: story
+triggers: first, second, third
+The body, as plain sentences.
+
+"from" is "story" when the note organises what the author has already written, and
+"new" when it is your own addition."""
+
+_KW_FIRST = """Go through everything the author has written and pull out what deserves its
+own note: every named person, place, group, kind of creature, institution or custom
+that the narrator will need to keep straight. Each of these notes restates and gathers
+what the author wrote about it -- from wherever it appears -- and fills a gap only where
+it plainly follows from what they wrote. Mark these "from: story". At most {n_story}.
+
+Then add {n_new} notes of your own that extend the world in the direction it already
+points: a place these people would go, a custom or institution this world would have.
+Mark these "from: new". New notes may name places and institutions, but do not invent
+new named people."""
+
+_KW_MORE = """Propose {n_new} NEW notes that extend the world in the direction it already
+points: places, institutions, customs, kinds of creature, how things work here. Each
+must fit everything already written and must not repeat or overlap any existing note
+below. Mark them all "from: new". Do not invent new named people."""
+
+
+def _kw_context(story: dict, have: list[dict], seen: list[str]) -> str:
+    parts = []
+    if story.get("name"):
+        parts.append(f"The story is called {story['name']}.")
+    if story.get("rules"):
+        parts.append("Its rules:\n" + story["rules"].strip()[:3000])
+    if story.get("details"):
+        parts.append("The world:\n" + story["details"].strip()[:3000])
+    for it in (story.get("intros") or [])[:4]:
+        for key, label in (("prologue", "An opening scene"),
+                           ("opening_scene", "The narrator's notes on that opening")):
+            if (it.get(key) or "").strip():
+                parts.append(f"{label}:\n" + it[key].strip()[:2500])
+    cast = [c.get("name") for c in (story.get("cast") or []) if c.get("name")]
+    if cast:
+        parts.append("The cast: " + ", ".join(cast[:20]))
+    if have:
+        parts.append("Notes that ALREADY EXIST -- do not repeat or overlap these:\n" + "\n".join(
+            f"- {k.get('title')} ({', '.join(k.get('keywords') or [])}): "
+            + (k.get("body") or "").strip().replace("\n", " ")[:160]
+            for k in have[:40]))
+    if seen:
+        parts.append("Already offered to the author, do not offer again: " + ", ".join(seen[:60]))
+    return "\n\n".join(parts)
+
+
+_KW_SPLIT = re.compile(r"^\s*={3,}\s*", re.M)
+
+_ARTICLE = re.compile(r"^(the|a|an|her|his|their|its|my|your|our)\s+", re.I)
+# Words that name a kind of thing rather than this thing. "Pinecrest Park" may trigger
+# on "pinecrest" but not on "park", or it fires whenever anyone mentions any park.
+_GENERIC = {
+    "park", "bar", "pub", "tavern", "street", "road", "avenue", "hall", "house", "home",
+    "office", "shop", "store", "school", "club", "city", "town", "suburb", "district",
+    "registry", "bank", "banks", "company", "guild", "group", "family", "woman", "man",
+    "girl", "boy", "horse", "dog", "cat", "creature", "creatures", "people", "service",
+    "lost", "found", "headless", "black", "white", "old", "new", "little", "big",
+}
+
+
+def _triggers(raw: list[str], title: str) -> list[str]:
+    """Triggers that name THIS thing. The model is told not to write "the bar" or
+    "the woman" and writes them anyway; matching is plain substring, so each one would
+    fire the note on nearly every turn. A trigger is kept only if it shares a
+    distinctive word with the title, and a three-letter one is dropped because it
+    fires inside ordinary words ("orc" in "force")."""
+    own = {w for w in re.findall(r"[a-z0-9']+", title.lower()) if w not in _GENERIC and len(w) >= 4}
+    out = []
+    for t in raw:
+        t = _ARTICLE.sub("", " ".join(t.split()).lower().strip(" .\"'"))
+        words = set(re.findall(r"[a-z0-9']+", t))
+        # A plural or adjective of a title word counts: "dullahan" for "Dullahans",
+        # "orcish" for "Orcs".
+        mine = any(w.startswith(o.rstrip("s")) or o.startswith(w) for w in words for o in own)
+        # A phrase of two or more real words is specific on its own ("lost and found"),
+        # which matters when every word of the title is generic.
+        phrase = len([w for w in words if len(w) >= 3]) >= 2
+        if len(t) >= 4 and (mine or phrase) and t not in out:
+            out.append(t)
+    return out
+
+
+def _parse_notes(text: str) -> list[dict]:
+    import lorebook  # its trigger cleaning: drops generic and stop-word triggers
+    out = []
+    for chunk in _KW_SPLIT.split(text)[1:]:
+        lines = chunk.strip().splitlines()
+        if not lines:
+            continue
+        title = " ".join(lines[0].strip(" *#=").split())
+        src, trig, body = "new", [], []
+        for ln in lines[1:]:
+            low = ln.strip().lower()
+            if low.startswith("from:") and not body:
+                src = "story" if "story" in low else "new"
+            elif low.startswith("triggers:") and not body:
+                trig = [t for t in ln.split(":", 1)[1].split(",")]
+            else:
+                body.append(ln)
+        body_text = re.sub(r"\*\*([^*]+)\*\*", r"\1", "\n".join(body)).strip()
+        if not title or not body_text:
+            continue
+        out.append({"title": title,
+                    "keywords": lorebook._clean_keywords(_triggers(trig, title),
+                                                         _ARTICLE.sub("", title)),
+                    "body": body_text, "from": src})
+    return out
+
+
+def keyword_notes(story: dict, mode: str = "first", seen: list | None = None) -> list[dict]:
+    """Proposed keyword notes. "first" pulls notes out of what is written and adds a
+    couple of new ones; "more" only extends. Nothing is saved here."""
+    story = story or {}
+    have = [k for k in (story.get("keywords") or []) if isinstance(k, dict)]
+    seen = [str(s) for s in (seen or [])]
+    ask = (_KW_FIRST.format(n_story=6, n_new=2) if mode == "first"
+           else _KW_MORE.format(n_new=4))
+    system = _KW_FRAME + "\n\n" + _kw_context(story, have, seen)
+    stop: list[str] = []
+    out = brain.prose(system, [{"role": "user", "content": ask}],
+                      spec={**config.PROSE, "temperature": 0.7 if mode == "first" else 0.85},
+                      on_stop=stop.append)
+    taken = {k.get("title", "").lower() for k in have} | {s.lower() for s in seen}
+    notes = [n for n in _parse_notes(out) if n["title"].lower() not in taken]
+    # A note cut off by the reply ceiling ends mid-sentence; drop it rather than offer it.
+    if stop and stop[-1] == "max_tokens" and notes:
+        notes.pop()
+    return notes

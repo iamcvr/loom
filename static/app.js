@@ -2360,7 +2360,7 @@ async function saveSettings() {
 
 // assistUndo lives here rather than on the button: renderEditor() rebuilds the button.
 const ED = { id: '', data: null, section: 'Story', isNew: true, idTouched: false, dirty: false,
-             assistUndo: null };
+             assistUndo: null, kwOffer: [], kwSeen: [] };
 const ED_SECTIONS = ['Story', 'Openings', 'Stats', 'Keywords', 'Cast'];
 
 async function newStory() {
@@ -2371,6 +2371,8 @@ async function newStory() {
   ED.dirty = false;
   ED.section = 'Story';
   ED.assistUndo = null;
+  ED.kwOffer = [];
+  ED.kwSeen = [];
   showEditor();
 }
 
@@ -2382,6 +2384,8 @@ async function editStory(id) {
   ED.dirty = false;
   ED.section = 'Story';
   ED.assistUndo = null;
+  ED.kwOffer = [];
+  ED.kwSeen = [];
   showEditor();
   if (ED.data._problems?.length) showProblems(ED.data._problems);
 }
@@ -2742,6 +2746,7 @@ function secKeywords(d) {
     el('div', 'edEmpty', 'Lore that enters the prompt only when its keywords appear in ' +
       'recent turns. This is where the bulk of a world belongs — it costs nothing on ' +
       'the turns it is not needed.'),
+    keywordOffers(d),
     repeatable(d.keywords, {
       title: (k, i) => k.title || `Note ${i + 1}`,
       add: '+ Add a keyword note',
@@ -2762,6 +2767,84 @@ function secKeywords(d) {
       ],
     }),
   ];
+}
+
+/* Proposed notes, offered as cards. Nothing is added until accepted, and an accepted
+   note joins the unsaved story like any hand-written one. Offers live on ED so they
+   survive renderEditor(); every title offered goes into kwSeen so "More ideas" does
+   not hand the same ones back. */
+function keywordOffers(d) {
+  const wrap = el('div', 'kwOffers');
+  const note = el('span', 'muted small assistNote');
+  const ask = (mode, label) => {
+    const b = el('button', 'ghost', label);
+    b.onclick = async () => {
+      wrap.querySelectorAll('button').forEach((x) => { x.disabled = true; });
+      let secs = 0;
+      note.textContent = 'thinking…';
+      const tick = setInterval(() => { note.textContent = `thinking… ${++secs}s`; }, 1000);
+      try {
+        const r = await api('/api/assist/keywords', {
+          mode,
+          seen: ED.kwSeen,
+          story: {
+            name: d.name, rules: d.rules, details: d.details,
+            intros: (d.intros || []).map((it) => ({
+              prologue: it.prologue, opening_scene: it.opening_scene })),
+            cast: (d.cast || []).map((c) => ({ name: c.name })),
+            keywords: (d.keywords || []).map((k) => ({
+              title: k.title, keywords: k.keywords, body: k.body })),
+          },
+        });
+        clearInterval(tick);
+        const got = r.notes || [];
+        ED.kwOffer.push(...got);
+        ED.kwSeen.push(...got.map((n) => n.title));
+        if (got.length) { renderEditor(); return; }
+        note.textContent = 'nothing new came back';
+      } catch (e) {
+        clearInterval(tick);
+        note.textContent = e.message;
+      }
+      wrap.querySelectorAll('button').forEach((x) => { x.disabled = false; });
+    };
+    return b;
+  };
+
+  const row = el('div', 'assistRow');
+  row.append(ask('first', 'Suggest notes from my story…'),
+             ask('more', 'More ideas for the world…'), note);
+  wrap.append(field('', row, {
+    hint: 'The first pulls the people, places and groups out of everything you have '
+        + 'written so far, plus a couple of new ideas. The second only adds new ones. '
+        + 'Nothing is kept unless you add it.' }));
+
+  const take = (n) => {
+    d.keywords.push({ title: n.title, keywords: n.keywords, body: n.body, always: false });
+    ED.kwOffer = ED.kwOffer.filter((x) => x !== n);
+    touch();
+  };
+  if (ED.kwOffer.length > 1) {
+    const all = el('button', 'ghost small', `Add all ${ED.kwOffer.length}`);
+    all.onclick = () => { [...ED.kwOffer].forEach(take); renderEditor(); };
+    wrap.append(all);
+  }
+  ED.kwOffer.forEach((n) => {
+    const card = el('div', 'loreSug');
+    const head = el('div', 'lt', n.title);
+    head.append(el('span', 'kwFrom ' + (n.from === 'story' ? 'story' : 'new'),
+      n.from === 'story' ? 'from your story' : 'new idea'));
+    card.append(head, el('div', 'lb', n.body), el('div', 'lk', n.keywords.join(' · ')));
+    const acts = el('div', 'lacts');
+    const yes = el('button', 'primary small', 'Add');
+    yes.onclick = () => { take(n); renderEditor(); };
+    const no = el('button', 'ghost small', 'No');
+    no.onclick = () => { ED.kwOffer = ED.kwOffer.filter((x) => x !== n); renderEditor(); };
+    acts.append(yes, no);
+    card.append(acts);
+    wrap.append(card);
+  });
+  return wrap;
 }
 
 function secCast(d) {
