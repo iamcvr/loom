@@ -274,7 +274,17 @@ def utility(prompt: str, schema: dict, *, spec: Optional[dict] = None,
         try:
             return json.loads(body)
         except json.JSONDecodeError as e:
-            raise BrainError(f"ollama utility returned non-JSON: {body[:200]}") from e
+            # A truncated reply is the usual cause and the message used to blame
+            # the model for it: generation stops at num_predict mid-string, so the
+            # JSON carrying the prose is cut off rather than the prose being wrong.
+            # Saying which it was turns a baffling error into an actionable one.
+            cut = bool(body.strip()) and not body.rstrip().endswith("}")
+            raise BrainError(
+                ("ollama utility hit its token limit before finishing the JSON "
+                 f"(max_tokens={spec.get('max_tokens')}). Raise it or ask for less: "
+                 f"{body[:160]}\u2026")
+                if cut else
+                f"ollama utility returned non-JSON: {body[:200]}") from e
 
     # OpenAI-compatible providers (local) — ask for a JSON object.
     url = spec.get("url", "").rstrip("/") + "/chat/completions"

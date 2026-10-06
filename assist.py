@@ -52,10 +52,12 @@ Return only the field's new contents. No preamble, no explanation, no markdown f
 FIELDS: dict[str, dict] = {
     "details": {
         "label": "World details",
-        # Four to six, not eight. At eight it returned 4,345 characters, and
-        # `rules` + `details` + the opening scene share an 11,000-character ceiling
-        # that a story with substantial rules would then overrun.
-        "paragraphs": (4, 6),
+        # Three to five. At six it produced 4,345 characters on a sparse world and
+        # ran past max_tokens on a rich one, which truncates the JSON mid-string and
+        # fails as "returned non-JSON" -- a parse error that looks like a model fault
+        # and is really a budget one. `rules` + `details` + the opening scene also
+        # share an 11,000-character ceiling.
+        "paragraphs": (3, 5),
         "guide": """This field is WHAT IS TRUE about the world. Facts the narrator needs
 in order not to contradict itself: the place, the era, how things work, who holds
 power, what is normal here and what is not. It is read on every single turn.
@@ -73,8 +75,9 @@ creates characters the story does not know about, which the narrator will then
 contradict. Describe roles and groups -- "three boatbuilders", "the harbourmaster" --
 never "Marcus, who has been doing it since he was sixteen".
 
-Each paragraph is a separate item, three to five sentences, on one aspect of the
-world. 800-2,000 characters across all of them. If they gave you two sentences,
+Each paragraph is a separate item of TWO TO FOUR sentences, on one aspect of the
+world. 700-1,600 characters across all of them -- this is a field the narrator reads
+on every turn, so density matters more than completeness. If they gave you two sentences,
 expand by adding the concrete consequences of what they said, never by padding.
 
 Plain prose. No headings, no bullet lists.""",
@@ -109,7 +112,11 @@ def improve(field: str, text: str, story: dict | None = None) -> str:
                                               "the story's name, tagline and rules)"),
     ])
     lo, hi = spec.get("paragraphs", (3, 8))
+    # Headroom over what the field should need. Hitting the cap does not truncate
+    # the prose, it truncates the JSON carrying it, so the whole call fails to parse
+    # -- the cost of being generous here is seconds, the cost of being tight is the
+    # author losing the whole wait.
     out = brain.utility(prompt, _schema(lo, hi),
-                        spec={**config.UTILITY, "max_tokens": 1500}, timeout=300)
+                        spec={**config.UTILITY, "max_tokens": 2600}, timeout=300)
     paras = [str(x).strip() for x in (out.get("paragraphs") or []) if str(x).strip()]
     return "\n\n".join(paras)
