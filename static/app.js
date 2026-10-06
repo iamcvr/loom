@@ -228,15 +228,6 @@ async function boot() {
     sw.append(c);
   });
 
-  // Two ways in, and the interview is listed first on purpose: writing one from
-  // scratch means producing several thousand characters of craft before playing a
-  // single turn, which is the harder path even when you know what you want.
-  const iv = el('div', 'card');
-  iv.append(el('b', null, '+ Interview me'),
-            el('span', 'muted small', 'Answer a few questions and it writes the story'));
-  iv.onclick = openInterview;
-  sw.append(iv);
-
   const add = el('div', 'card');
   add.append(el('b', null, '+ New story'),
              el('span', 'muted small', 'Write one from scratch'));
@@ -2380,114 +2371,6 @@ async function newStory() {
   showEditor();
 }
 
-/* Simple mode. Writing a story by hand asks for several thousand characters of
-   specific craft before anyone has played a turn; most people cannot, and a vague
-   ruleset produces vague stories forever. So the engine asks instead, using the same
-   model that will narrate it.
-
-   What comes back is a PROPOSAL: it fills the editor and is not saved. */
-
-const IV = { history: [], learned: [], ready: false, busy: false };
-
-function openInterview() {
-  IV.history = [];
-  IV.learned = [];
-  IV.ready = false;
-  $('ivBody').innerHTML = '';
-  $('ivWrite').disabled = true;
-  $('ivStatus').textContent = '';
-  ivSay('assistant', 'Tell me about the story you want to play in. Where is it, when, '
-    + 'and who are you in it? A sentence is enough to start.');
-  $('ivDlg').showModal();
-  $('ivInput').focus();
-}
-
-function ivSay(role, text) {
-  const b = $('ivBody');
-  const n = el('div', 'ivMsg iv-' + role);
-  n.append(el('div', 'ivWho', role === 'user' ? 'You' : 'loom'));
-  const body = el('div', 'ivText');
-  formatInto(body, text);
-  n.append(body);
-  b.append(n);
-  b.scrollTop = b.scrollHeight;
-}
-
-function ivKnown(learned) {
-  const box = $('ivKnown');
-  box.innerHTML = '';
-  if (!learned.length) { box.classList.add('hidden'); return; }
-  box.classList.remove('hidden');
-  box.append(el('div', 'ivKnownHead', 'What it has so far'));
-  learned.forEach((x) => box.append(el('div', 'ivKnownRow', x)));
-}
-
-async function ivTurn() {
-  const t = $('ivInput').value.trim();
-  if (!t || IV.busy) return;
-  $('ivInput').value = '';
-  ivSay('user', t);
-  IV.history.push({ role: 'user', text: t });
-  IV.busy = true;
-  $('ivSend').disabled = true;
-  $('ivStatus').textContent = 'thinking\u2026';
-  try {
-    const r = await api('/api/interview',
-      { history: IV.history, learned: IV.learned });
-    const said = [r.reply, ...(r.questions || [])].filter(Boolean).join('\n\n');
-    ivSay('assistant', said || '(no reply)');
-    // What it believes it has, shown so it can be corrected. Writing this is what
-    // stops it re-asking answered questions, so the author may as well see it.
-    IV.learned = r.learned || IV.learned;
-    ivKnown(IV.learned);
-    IV.history.push({ role: 'assistant', text: said });
-    IV.ready = !!r.ready;
-    $('ivWrite').disabled = !IV.ready;
-    // Enabled early on purpose: someone who has said enough should not be made to
-    // answer more, and the model is cautious about declaring itself ready.
-    if (IV.history.filter((m) => m.role === 'user').length >= 2) $('ivWrite').disabled = false;
-    $('ivStatus').textContent = IV.ready ? 'ready when you are' : '';
-  } catch (e) {
-    $('ivStatus').textContent = e.message;
-  }
-  IV.busy = false;
-  $('ivSend').disabled = false;
-}
-
-async function ivWrite() {
-  if (IV.busy) return;
-  IV.busy = true;
-  $('ivWrite').disabled = true;
-  $('ivSend').disabled = true;
-  // Minutes, not seconds: it is several thousand characters of structured output on
-  // a local model. Saying so beats a spinner that looks hung.
-  let secs = 0;
-  $('ivStatus').textContent = 'writing it\u2026 this takes a few minutes';
-  const tick = setInterval(() => {
-    secs += 1;
-    $('ivStatus').textContent = `writing it\u2026 ${secs}s (a few minutes is normal)`;
-  }, 1000);
-  try {
-    const r = await api('/api/interview/compose', { history: IV.history });
-    clearInterval(tick);
-    ED.data = { ...(await api('/api/story/new')), ...r.story };
-    ED.isNew = true;
-    ED.idTouched = false;
-    ED.dirty = true;
-    ED.section = 'Story';
-    $('ivDlg').close();
-    showEditor();
-    if (r.problems?.length) showProblems(r.problems);
-    $('edStatus').textContent = 'drafted \u2014 read it, change it, then Save';
-  } catch (e) {
-    clearInterval(tick);
-    $('ivStatus').textContent = e.message;
-    $('ivWrite').disabled = false;
-    $('ivSend').disabled = false;
-  }
-  IV.busy = false;
-}
-
 async function editStory(id) {
   ED.data = await api('/api/story/' + id);
   ED.id = id;
@@ -2717,6 +2600,17 @@ function secStory(d) {
   // offering a choice between one real option and two sketches helps nobody.
   d.mode = d.mode || 'play';
 
+  // Above the field, not below it. A tool that writes INTO a box belongs before the
+  // box, where it is an offer rather than something you notice after doing the work
+  // by hand.
+  const rbBtn = el('button', 'ghost', 'Build the rules\u2026');
+  rbBtn.onclick = () => openRuleBuilder(d);
+  out.push(field('', rbBtn, {
+    hint: 'Twelve questions about tone, cast, action, romance, pacing and stakes. '
+        + 'Writes the answers into the box below as editable prose. What every '
+        + 'story shares lives in Settings instead, so this is only what is yours.',
+  }));
+
   out.push(field('Rules', area(d, 'rules', 12,
     'How the story is narrated. Tense, person, tone, pacing, what the narrator ' +
     'may and may not decide on the player\'s behalf.'), {
@@ -2725,13 +2619,10 @@ function secStory(d) {
           'director\'s note — this is the one block that is never trimmed away.',
   }));
 
-  const rbBtn = el('button', 'ghost', 'Build the rules\u2026');
-  rbBtn.onclick = () => openRuleBuilder(d);
-  out.push(field('', rbBtn, {
-    hint: 'Twelve questions about tone, cast, action, romance, pacing and stakes. '
-        + 'Writes the answers into the box above as editable prose. What every '
-        + 'story shares lives in Settings instead, so this is only what is yours.',
-  }));
+  out.push(assistButton('details', 'Shore up the world\u2026', d,
+    'Write what you know however you like, then press this. It rewrites it as facts '
+    + 'the narrator can build scenes from \u2014 concrete and specific, not adjectives '
+    + '\u2014 and leaves out anything the rules already say.'));
 
   out.push(field('World details', area(d, 'details', 10,
     'Setting, factions, geography, what is common knowledge.'), {
@@ -2983,6 +2874,43 @@ function setCastShot(slot, url, name) {
 /* The portrait on a cast card: see it, re-roll it, remove it. The dialog after a
    save is the first pass; this is where it is lived with afterwards. Both call
    drawOne, so a re-roll here and a re-roll there do exactly the same thing. */
+/* A field's own AI help, above the field it writes into. The result replaces what is
+   there in an unsaved editor, so the author accepts it by saving and rejects it by
+   not saving. */
+function assistButton(fieldName, label, d, hint) {
+  const btn = el('button', 'ghost', label);
+  const note = el('span', 'muted small assistNote');
+  btn.onclick = async () => {
+    btn.disabled = true;
+    let secs = 0;
+    note.textContent = 'thinking\u2026';
+    const tick = setInterval(() => { note.textContent = `thinking\u2026 ${++secs}s`; }, 1000);
+    try {
+      const r = await api('/api/assist', {
+        field: fieldName,
+        text: d[fieldName] || '',
+        // The rules are sent as context so this cannot contradict or repeat them.
+        story: { name: d.name, tagline: d.tagline, rules: d.rules },
+      });
+      clearInterval(tick);
+      if (r.text) {
+        d[fieldName] = r.text;
+        touch();
+        renderEditor();
+      } else {
+        note.textContent = 'nothing came back';
+      }
+    } catch (e) {
+      clearInterval(tick);
+      note.textContent = e.message;
+    }
+    btn.disabled = false;
+  };
+  const row = el('div', 'assistRow');
+  row.append(btn, note);
+  return field('', row, { hint });
+}
+
 function castPortraitRow(c) {
   const wrap = el('div', 'castShotRow');
   const img = el('div', 'castShotImg');
@@ -3359,12 +3287,6 @@ $('setBack').onclick = async () => {
 $('setSave').onclick = saveSettings;
 $('adviseGo').onclick = askAdvisor;
 $('adviseInput').onkeydown = (e) => { if (e.key === 'Enter') askAdvisor(); };
-$('ivClose').onclick = () => $('ivDlg').close();
-$('ivSend').onclick = ivTurn;
-$('ivWrite').onclick = ivWrite;
-$('ivInput').onkeydown = (e) => {
-  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) ivTurn();
-};
 $('castShotClose').onclick = () => {
   CASTSHOT.timers.forEach(clearInterval); CASTSHOT.timers = [];
   $('castShotDlg').close();
