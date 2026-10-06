@@ -32,6 +32,13 @@ _lock = threading.Lock()
 _state: dict[str, Any] = {"queued": 0, "rendering": None, "last_error": None, "done": 0}
 _last_scene_turn: dict[int, int] = {}
 
+# Portrait candidates offered during character creation, before a session exists to
+# own them. Deliberately in memory and not in the media table: they are proposals,
+# most of them are discarded, and a restart mid-creation losing them is a cheaper
+# outcome than rows nobody ever cleans up. The chosen one is copied into the
+# session's media when the session is created.
+_cands: dict[str, dict] = {}
+
 
 # ---------------------------------------------------------------- image server
 
@@ -107,16 +114,23 @@ def _slug(subject: str) -> str:
 
 def _handle(job: dict) -> None:
     kind, sid, subject = job["kind"], job["session_id"], job["subject"]
-    size = config.IMG_PORTRAIT if kind == "portrait" else config.IMG_SCENE
+    size = config.IMG_SCENE if kind == "scene" else config.IMG_PORTRAIT
 
     data = _render(job["prompt"], size, job["seed"], f"loom/{kind}",
                    job.get("checkpoint", ""), job.get("negative", ""))
 
     config.MEDIA_DIR.mkdir(parents=True, exist_ok=True)
     slug = _slug(subject)
-    name = f"{sid}_{kind}_{slug}_{int(time.time())}.png"
+    name = f"{sid}_{kind}_{slug}_{int(time.time())}_{job.get('seed', 0)}.png"
     path = config.MEDIA_DIR / name
     path.write_bytes(data)
+
+    if kind == "candidate":
+        with _lock:
+            c = _cands.get(job["token"])
+            if c is not None:
+                c["images"].append(name)
+        return
 
     store.add_media(sid, kind, subject, name, job["prompt"], job["turn"])
 
@@ -286,3 +300,65 @@ def reachable() -> bool:
         return True
     except Exception:
         return False
+
+
+# ---------------------------------------------------------------- candidates
+
+
+def request_candidates(prompt: str, n: int = 4, negative: str = "",
+                       checkpoint: str = "") -> str:
+    """Queue n portrait options and return a token to poll.
+
+    One job each rather than one batched request, so they finish one at a time and
+    the first option is on screen in about 45 seconds instead of all four arriving
+    after three minutes. Waiting is more tolerable when something is happening.
+    """
+    token = f"c{int(time.time()*1000)}{random.randint(100, 999)}"
+    with _lock:
+        _cands[token] = {"images": [], "total": int(n), "error": None,
+                         "started": time.time()}
+    for i in range(int(n)):
+        _enqueue({"kind": "candidate", "session_id": 0, "subject": "candidate",
+                  "prompt": prompt, "negative": negative, "checkpoint": checkpoint,
+                  "turn": 0, "seed": random.randint(1, 2_000_000_000),
+                  "token": token})
+    return token
+
+
+def candidates(token: str) -> dict:
+    """Progress so far. Images appear in this list as each render lands."""
+    with _lock:
+        c = _cands.get(token)
+        if not c:
+            return {"images": [], "total": 0, "done": 0, "error": "unknown token"}
+        return {"images": list(c["images"]), "total": c["total"],
+                "done": len(c["images"]), "error": c["error"],
+                "elapsed": int(time.time() - c["started"])}
+
+
+def claim_candidate(session_id: int, name: str, subject: str, prompt: str) -> None:
+    """Attach a chosen candidate to a session as that character's portrait.
+
+    The file is already on disk; this only records it. The unchosen ones are left
+    where they are -- see sweep_candidates().
+    """
+    store.add_media(session_id, "portrait", subject, name, prompt, 0)
+
+
+def sweep_candidates(max_age: int = 3600) -> int:
+    """Delete candidate files nobody claimed. Called at startup.
+
+    A character-creation screen that was abandoned leaves four 900 KB renders on
+    disk with nothing referencing them, and nothing else would ever remove them.
+    """
+    claimed = set(store.all_media_paths())
+    n = 0
+    cutoff = time.time() - max_age
+    for f in config.MEDIA_DIR.glob("0_candidate_*.png"):
+        try:
+            if f.name not in claimed and f.stat().st_mtime < cutoff:
+                f.unlink()
+                n += 1
+        except OSError:
+            pass
+    return n

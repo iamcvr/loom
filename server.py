@@ -417,6 +417,8 @@ class Handler(BaseHTTPRequestHandler):
                             "comfy": images.reachable()})
             elif path == "/api/stories":
                 self._json(story_mod.available())
+            elif path == "/api/candidates":
+                self._json(images.candidates(qs.get("token", [""])[0]))
             elif path == "/api/rulebuilder":
                 # Static: the questionnaire never varies per story or session.
                 self._json({"axes": rulebuilder.schema()})
@@ -520,6 +522,12 @@ class Handler(BaseHTTPRequestHandler):
                     pro = store.set_protagonist(sid, {**defaults, **submitted})
                     if pro.get("name"):
                         images.set_portrait_prompt(sid, pro["name"], pro.get("prompt", ""))
+                        # A portrait chosen during character creation, before this
+                        # session existed to own it.
+                        pick = str(body.get("portrait_pick") or "")
+                        if pick:
+                            images.claim_candidate(sid, pick, pro["name"],
+                                                   pro.get("prompt", ""))
 
                 store.add_message(
                     sid, "assistant",
@@ -645,6 +653,13 @@ class Handler(BaseHTTPRequestHandler):
                                              manual=True, replace=bool(body.get("replace")))
                 self._json({"queued": ok, "images": images.status()})
 
+            elif path == "/api/candidates":
+                if not config.IMAGES_ENABLED:
+                    raise ValueError("image generation is off in Settings")
+                self._json({"token": images.request_candidates(
+                    str(body.get("prompt") or "").strip(),
+                    n=max(1, min(6, int(body.get("n") or 4))),
+                    negative=str(body.get("negative") or ""))})
             elif path == "/api/rulebuilder":
                 # Generated server-side rather than in the browser, although the
                 # browser already has every fragment. build() enforces the one
@@ -875,6 +890,7 @@ def serve() -> None:
     # Child rows whose session is gone. SQLite reuses a freed session id, so an
     # orphan is not inert — it gets adopted by the next story created.
     orphans = store.purge_orphans()
+    images.sweep_candidates()
     if orphans:
         print("  purged orphaned rows: "
               + ", ".join(f"{n} {t}" for t, n in sorted(orphans.items())))

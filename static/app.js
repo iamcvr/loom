@@ -199,6 +199,36 @@ async function start(storyId) {
 
 const PC = { mode: null, storyId: null, defaults: null };
 
+async function pollCandidates(token, shots, status, gen) {
+  let d;
+  try { d = await api('/api/candidates?token=' + encodeURIComponent(token)); }
+  catch { return; }
+  if (PC.token !== token) { clearInterval(PC.poll); return; }
+
+  d.images.forEach((name) => {
+    if (shots.querySelector(`[data-name="${name}"]`)) return;
+    const img = el('img');
+    img.dataset.name = name;
+    img.src = '/media/' + name;
+    img.onclick = () => {
+      PC.pick = PC.pick === name ? null : name;
+      shots.querySelectorAll('img').forEach(
+        (x) => x.classList.toggle('on', x.dataset.name === PC.pick));
+    };
+    shots.append(img);
+  });
+
+  const left = d.total - d.done;
+  status.textContent = d.error ? d.error
+    : d.done >= d.total
+      ? `${d.done} options \u2014 click one to use it`
+      : `${d.done} of ${d.total} \u00b7 ${d.elapsed}s \u00b7 about 45s each, ${left} to go`;
+  if (d.done >= d.total || d.error) {
+    clearInterval(PC.poll);
+    gen.disabled = false;
+  }
+}
+
 function pcField(body, label, help, value, opts = {}) {
   body.append(el('h4', null, label));
   if (help) body.append(el('div', 'lede', help));
@@ -277,6 +307,36 @@ function openPC({ storyId = null, defaults = null } = {}) {
     'Comma-separated image tags for your portrait. Not used in the prose.',
     cur.prompt, { rows: 3 });
 
+  /* Portraits are chosen here, before the session exists, because this is the
+     moment someone is deciding who they are. Options arrive one at a time rather
+     than all at the end -- each is its own render, so the first face is on screen
+     in about 45 seconds instead of everything appearing after three minutes. */
+  PC.pick = null;
+  clearInterval(PC.poll);
+  const shots = el('div', 'pcShots');
+  const shotStatus = el('div', 'pcShotStatus muted small');
+  const gen = el('button', 'ghost', 'Generate portraits');
+  gen.onclick = async () => {
+    const prompt = f.prompt.value.trim();
+    if (!prompt) { shotStatus.textContent = 'describe an appearance first'; return; }
+    gen.disabled = true;
+    shots.innerHTML = '';
+    PC.pick = null;
+    shotStatus.textContent = 'queued\u2026';
+    try {
+      const { token } = await api('/api/candidates', { prompt, n: 4 });
+      PC.token = token;
+      clearInterval(PC.poll);
+      PC.poll = setInterval(() => pollCandidates(token, shots, shotStatus, gen), 3000);
+    } catch (e) {
+      shotStatus.textContent = e.message;
+      gen.disabled = false;
+    }
+  };
+  const shotRow = el('div', 'pcShotRow');
+  shotRow.append(gen, shotStatus);
+  body.append(shotRow, shots);
+
   // Live size against the layer's allowance. A character sheet that overruns is
   // not an error anywhere — the arbiter simply trims the tail — so without this
   // the only symptom is the narrator quietly not knowing what your power does.
@@ -316,7 +376,8 @@ function openPC({ storyId = null, defaults = null } = {}) {
         render(await api('/api/protagonist', { session: S.id, values }));
         refreshContext();
       } else {
-        const st = await api('/api/session', { story: PC.storyId, protagonist: values });
+        const st = await api('/api/session',
+          { story: PC.storyId, protagonist: values, portrait_pick: PC.pick || '' });
         S.id = st.session_id;
         render(st);
         show();
@@ -2813,7 +2874,7 @@ $('actChip').onclick = pickAct;
 $('btnChapters').onclick = openChapterBreak;
 $('chapCancel').onclick = () => $('chapDlg').close();
 $('btnYou').onclick = () => openPC();
-$('pcCancel').onclick = () => $('pcDlg').close();
+$('pcCancel').onclick = () => { clearInterval(PC.poll); $('pcDlg').close(); };
 $('btnLore').onclick = () => openLore(null);
 $('loreCancel').onclick = () => $('loreDlg').close();
 $('loreDlg').onclick = (e) => { if (e.target === $('loreDlg')) $('loreDlg').close(); };

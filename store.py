@@ -882,6 +882,12 @@ def add_media(
         return int(cur.lastrowid)
 
 
+def all_media_paths() -> list[str]:
+    """Every media filename the database references, for orphan sweeping."""
+    with _conn() as c:
+        return [r["path"] for r in c.execute("SELECT path FROM media").fetchall()]
+
+
 def find_media(session_id: int, kind: str, subject: str) -> Optional[dict]:
     with _conn() as c:
         r = c.execute(
