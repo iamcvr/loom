@@ -388,6 +388,24 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send(200, p.read_bytes(), "image/png", {"Cache-Control": "public, max-age=31536000"})
 
+    def _story_img(self, rest: str) -> None:
+        """Serve stories/<id>/portraits/<file>. Story-owned, unlike /media.
+
+        Same traversal shape as _media: decode first, resolve, then check
+        containment, so a decoded "../" still cannot escape the stories tree.
+        """
+        parts = unquote(rest).split("/")
+        if len(parts) != 2:
+            self._json({"error": "not found"}, 404)
+            return
+        root = config.STORIES_DIR.resolve()
+        p = (config.STORIES_DIR / parts[0] / "portraits" / parts[1]).resolve()
+        if not str(p).startswith(str(root)) or not p.is_file():
+            self._json({"error": "not found"}, 404)
+            return
+        self._send(200, p.read_bytes(), "image/png",
+                   {"Cache-Control": "public, max-age=31536000"})
+
     # -- GET
 
     def do_GET(self) -> None:
@@ -412,6 +430,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._static(path[len("/static/"):])
             elif path.startswith("/media/"):
                 self._media(path[len("/media/"):])
+            elif path.startswith("/story-img/"):
+                self._story_img(path[len("/story-img/"):])
             elif path == "/api/health":
                 self._json({**brain.health(), "images": images.status(),
                             "comfy": images.reachable()})
@@ -660,6 +680,13 @@ class Handler(BaseHTTPRequestHandler):
                     str(body.get("prompt") or "").strip(),
                     n=max(1, min(6, int(body.get("n") or 4))),
                     negative=str(body.get("negative") or ""))})
+            elif path == "/api/cast-portrait":
+                # Copies a candidate out of the shared media directory and into the
+                # story's own folder, where it belongs to the story rather than to
+                # whoever happened to generate it.
+                self._json(story_mod.adopt_portrait(
+                    str(body.get("story") or ""), str(body.get("name") or ""),
+                    str(body.get("candidate") or "")))
             elif path == "/api/rulebuilder":
                 # Generated server-side rather than in the browser, although the
                 # browser already has every fragment. build() enforces the one

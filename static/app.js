@@ -199,6 +199,75 @@ async function start(storyId) {
 
 const PC = { mode: null, storyId: null, defaults: null };
 
+/* Generate several portraits, show them as they land, let one be chosen.
+
+   Used by the cast editor and by character creation, which want the same thing for
+   different owners: a cast portrait belongs to the story and is copied into its
+   folder, a protagonist's belongs to the session being started. The difference is
+   entirely in onPick. */
+function portraitPicker({ getPrompt, onPick, current = null, n = 4 }) {
+  const wrap = el('div', 'picker');
+  const shots = el('div', 'pcShots');
+  const status = el('div', 'pcShotStatus muted small');
+  const gen = el('button', 'ghost', 'Generate portraits');
+  let timer = null, token = null, chosen = null;
+
+  if (current) {
+    const img = el('img', 'on');
+    img.src = current;
+    shots.append(img);
+    status.textContent = 'current portrait';
+  }
+
+  gen.onclick = async () => {
+    const prompt = (getPrompt() || '').trim();
+    if (!prompt) { status.textContent = 'describe an appearance first'; return; }
+    gen.disabled = true;
+    shots.innerHTML = '';
+    chosen = null;
+    status.textContent = 'queued\u2026';
+    try {
+      const r = await api('/api/candidates', { prompt, n });
+      token = r.token;
+      clearInterval(timer);
+      timer = setInterval(tick, 3000);
+      tick();
+    } catch (e) { status.textContent = e.message; gen.disabled = false; }
+  };
+
+  async function tick() {
+    let d;
+    try { d = await api('/api/candidates?token=' + encodeURIComponent(token)); }
+    catch { return; }
+    d.images.forEach((name) => {
+      if (shots.querySelector(`[data-name="${name}"]`)) return;
+      const img = el('img');
+      img.dataset.name = name;
+      img.src = '/media/' + name;
+      img.onclick = async () => {
+        chosen = name;
+        shots.querySelectorAll('img').forEach(
+          (x) => x.classList.toggle('on', x.dataset.name === name));
+        status.textContent = 'saving\u2026';
+        try { await onPick(name); status.textContent = 'chosen'; }
+        catch (e) { status.textContent = e.message; }
+      };
+      shots.append(img);
+    });
+    const left = d.total - d.done;
+    status.textContent = d.error ? d.error
+      : d.done >= d.total ? `${d.done} options \u2014 click one to use it`
+      : `${d.done} of ${d.total} \u00b7 ${d.elapsed}s \u00b7 about 45s each, ${left} to go`;
+    if (d.done >= d.total || d.error) { clearInterval(timer); gen.disabled = false; }
+  }
+
+  const row = el('div', 'pcShotRow');
+  row.append(gen, status);
+  wrap.append(row, shots);
+  wrap.stop = () => clearInterval(timer);
+  return wrap;
+}
+
 async function pollCandidates(token, shots, status, gen) {
   let d;
   try { d = await api('/api/candidates?token=' + encodeURIComponent(token)); }
@@ -2556,6 +2625,24 @@ function secCast(d) {
           '1girl, half-elf, dark bob, ink-stained fingers, guild coat'), {
           req: true,
           hint: 'Image tags, not prose. Quality tags and image style are added for you.',
+        }),
+        // Chosen here, at the point the character is being described, and stored
+        // with the story -- every playthrough sees the same faces.
+        field('', portraitPicker({
+          getPrompt: () => c.prompt,
+          current: c.portrait && ED.id ? `/story-img/${ED.id}/${c.portrait}` : null,
+          onPick: async (candidate) => {
+            if (!ED.id) throw new Error('save the story once before adding portraits');
+            if (!c.name) throw new Error('give the character a name first');
+            const r = await api('/api/cast-portrait',
+              { story: ED.id, name: c.name, candidate });
+            c.portrait = r.portrait;
+            touch();
+          },
+        }), {
+          hint: 'Generates four options from the tags above. The one you pick is '
+              + 'copied into the story folder, so it belongs to the story rather '
+              + 'than to a single playthrough.',
         }),
       ],
     }),

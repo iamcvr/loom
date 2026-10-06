@@ -17,7 +17,7 @@ from typing import Any, Optional
 
 import yaml
 
-from config import STATE_DIR, STORIES_DIR
+from config import MEDIA_DIR, STATE_DIR, STORIES_DIR
 
 _cache: dict[str, tuple[float, dict]] = {}
 
@@ -161,6 +161,9 @@ def _validate(raw: Any, story_id: str) -> tuple[dict, list[str]]:
                 # learns their name. Without this the state extractor has to guess
                 # which "the half-elf" is, and it guesses wrong.
                 "short": ch.get("short", "") or "",
+                # A chosen portrait, living in stories/<id>/portraits/ so it
+                # travels with the story rather than belonging to one session.
+                "portrait": (ch.get("portrait", "") or "").strip(),
             }
         )
     story["cast"] = cast
@@ -557,7 +560,7 @@ def _ordered(story: dict) -> dict:
         ]
     if story.get("cast"):
         out["cast"] = [
-            {k: ch[k] for k in ("name", "short", "aliases", "prompt")
+            {k: ch[k] for k in ("name", "short", "aliases", "prompt", "portrait")
              if ch.get(k) not in ("", [], None)}
             for ch in story["cast"]
         ]
@@ -709,3 +712,31 @@ def cast_member(story: dict, name: str) -> Optional[dict]:
         if any(a.strip().lower() == n for a in ch.get("aliases", [])):
             return ch
     return None
+
+
+def adopt_portrait(story_id: str, name: str, candidate: str) -> dict:
+    """Move a generated candidate into a story's own portraits folder.
+
+    Cast portraits belong to the story, not to a session: the story describes the
+    people in its world and every playthrough sees the same faces. Keeping the file
+    beside story.yaml also means a story stays self-contained if it is ever copied
+    or shared.
+    """
+    sid = check_id(story_id)
+    src = (MEDIA_DIR / candidate).resolve()
+    if not str(src).startswith(str(MEDIA_DIR.resolve())) or not src.is_file():
+        raise StoryError(sid, ["no such candidate image"])
+    out_dir = STORIES_DIR / sid / "portraits"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    fname = f"{_slug_name(name)}.png"
+    shutil.copyfile(src, out_dir / fname)
+    return {"portrait": fname, "url": f"/story-img/{sid}/{fname}"}
+
+
+def _slug_name(name: str) -> str:
+    """Filename fragment for a character name. Mirrors images._slug."""
+    import unicodedata
+    flat = "".join(c for c in unicodedata.normalize("NFKD", name or "")
+                   if not unicodedata.combining(c))
+    keep = [c if (c.isalnum() and c.isascii()) or c in "-_" else "_" for c in flat]
+    return ("_".join(filter(None, "".join(keep).split("_"))) or "x")[:60]
