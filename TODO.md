@@ -36,11 +36,30 @@ thirty characters of a key that is usually longer, so it wraps. Every selector i
 phone block was checked to exist in the markup — one did not and was an invented
 class.
 
-**What is actually left needs a phone.** The audit finds rules that cannot work; it
+**2026-10-06, found on an actual phone** — and every one of these was caused by the
+phone CSS itself, which is the argument for a device over an audit:
+
+- the side panel opened and could not be closed. The drawer sits at a hardcoded
+  `inset: 48px`, assuming a one-row header; the phone pass had added
+  `.bar { flex-wrap: wrap }`, so the header became two rows and the drawer covered
+  the row holding the button that opens it. It is full height now and carries its
+  own close button.
+- **every dialog was permanently on the page.** The phone rule set `display: flex`
+  on `.dlg` to make the body the flex child that scrolls — which overrode the
+  browser's `display: none` for a closed `<dialog>`. Scoped to `[open]`.
+- the settings advisor rendered below the content rather than over it.
+
+**Known hazard.** Mobile rules are spread across four `@media` blocks at different
+depths of the stylesheet, and source order has silently decided whether a rule did
+anything four separate times: `.panelsClose` never rendered, the dialog rule was
+overridden, a hide rule landed above the rule it overrode, and one block was moved
+without its closing brace and swallowed a hundred lines. A brace count passed that
+last one, because the orphan was still in the file — only a depth walk catches it.
+**Consolidate the media blocks into one at the end of the file** before adding more.
+
+**What is still left needs a phone.** An audit finds rules that cannot work; it
 cannot find a screen that is merely unpleasant — spacing, reachability, whether a
-dialog's footer is above the keyboard, whether the composer is usable one-handed.
-That is a pass screen by screen with a device in hand, and it is the only honest way
-to close this.
+dialog's footer clears the keyboard, whether the composer is usable one-handed.
 
 ### 2. First-install setup guide
 
