@@ -199,75 +199,6 @@ async function start(storyId) {
 
 const PC = { mode: null, storyId: null, defaults: null };
 
-/* Generate several portraits, show them as they land, let one be chosen.
-
-   Used by the cast editor and by character creation, which want the same thing for
-   different owners: a cast portrait belongs to the story and is copied into its
-   folder, a protagonist's belongs to the session being started. The difference is
-   entirely in onPick. */
-function portraitPicker({ getPrompt, onPick, current = null, n = 4 }) {
-  const wrap = el('div', 'picker');
-  const shots = el('div', 'pcShots');
-  const status = el('div', 'pcShotStatus muted small');
-  const gen = el('button', 'ghost', 'Generate portraits');
-  let timer = null, token = null, chosen = null;
-
-  if (current) {
-    const img = el('img', 'on');
-    img.src = current;
-    shots.append(img);
-    status.textContent = 'current portrait';
-  }
-
-  gen.onclick = async () => {
-    const prompt = (getPrompt() || '').trim();
-    if (!prompt) { status.textContent = 'describe an appearance first'; return; }
-    gen.disabled = true;
-    shots.innerHTML = '';
-    chosen = null;
-    status.textContent = 'queued\u2026';
-    try {
-      const r = await api('/api/candidates', { prompt, n });
-      token = r.token;
-      clearInterval(timer);
-      timer = setInterval(tick, 3000);
-      tick();
-    } catch (e) { status.textContent = e.message; gen.disabled = false; }
-  };
-
-  async function tick() {
-    let d;
-    try { d = await api('/api/candidates?token=' + encodeURIComponent(token)); }
-    catch { return; }
-    d.images.forEach((name) => {
-      if (shots.querySelector(`[data-name="${name}"]`)) return;
-      const img = el('img');
-      img.dataset.name = name;
-      img.src = '/media/' + name;
-      img.onclick = async () => {
-        chosen = name;
-        shots.querySelectorAll('img').forEach(
-          (x) => x.classList.toggle('on', x.dataset.name === name));
-        status.textContent = 'saving\u2026';
-        try { await onPick(name); status.textContent = 'chosen'; }
-        catch (e) { status.textContent = e.message; }
-      };
-      shots.append(img);
-    });
-    const left = d.total - d.done;
-    status.textContent = d.error ? d.error
-      : d.done >= d.total ? `${d.done} options \u2014 click one to use it`
-      : `${d.done} of ${d.total} \u00b7 ${d.elapsed}s \u00b7 about 45s each, ${left} to go`;
-    if (d.done >= d.total || d.error) { clearInterval(timer); gen.disabled = false; }
-  }
-
-  const row = el('div', 'pcShotRow');
-  row.append(gen, status);
-  wrap.append(row, shots);
-  wrap.stop = () => clearInterval(timer);
-  return wrap;
-}
-
 async function pollCandidates(token, shots, status, gen) {
   let d;
   try { d = await api('/api/candidates?token=' + encodeURIComponent(token)); }
@@ -2626,24 +2557,6 @@ function secCast(d) {
           req: true,
           hint: 'Image tags, not prose. Quality tags and image style are added for you.',
         }),
-        // Chosen here, at the point the character is being described, and stored
-        // with the story -- every playthrough sees the same faces.
-        field('', portraitPicker({
-          getPrompt: () => c.prompt,
-          current: c.portrait && ED.id ? `/story-img/${ED.id}/${c.portrait}` : null,
-          onPick: async (candidate) => {
-            if (!ED.id) throw new Error('save the story once before adding portraits');
-            if (!c.name) throw new Error('give the character a name first');
-            const r = await api('/api/cast-portrait',
-              { story: ED.id, name: c.name, candidate });
-            c.portrait = r.portrait;
-            touch();
-          },
-        }), {
-          hint: 'Generates four options from the tags above. The one you pick is '
-              + 'copied into the story folder, so it belongs to the story rather '
-              + 'than to a single playthrough.',
-        }),
       ],
     }),
   ];
@@ -2690,6 +2603,83 @@ async function checkStory() {
   return r.ok;
 }
 
+/* After a save, offer to draw the cast. Here rather than in the Cast section
+   because this is the moment the characters are finished being described, and a
+   button sitting beside each one asks to be pressed before the description is.
+
+   One neutral portrait each. No mood sets yet -- a mood set needs a stored seed so
+   the faces stay the same person between expressions, and that is worth building
+   when there is a reason for it rather than ahead of one. A face you dislike is
+   re-rolled on the spot. */
+
+const CASTSHOT = { rows: [], timers: [] };
+
+function offerCastPortraits() {
+  const todo = (ED.data.cast || []).filter((c) => c.name && c.prompt);
+  if (!todo.length) return;
+  const missing = todo.filter((c) => !c.portrait);
+  if (!missing.length) return;          // nothing to offer
+
+  const body = $('castShotBody');
+  body.innerHTML = '';
+  CASTSHOT.rows = todo.map((c) => {
+    const row = el('div', 'castShotRow');
+    const img = el('div', 'castShotImg');
+    if (c.portrait) {
+      const i = el('img');
+      i.src = `/story-img/${ED.id}/${c.portrait}?t=` + Date.now();
+      img.append(i);
+    }
+    const meta = el('div', 'castShotMeta');
+    meta.append(el('div', 'castShotName', c.name));
+    const st = el('div', 'muted small', c.portrait ? 'has a portrait' : 'none yet');
+    meta.append(st);
+    const roll = el('button', 'ghost', c.portrait ? 'Re-roll' : 'Draw');
+    roll.onclick = () => drawOne(c, img, st, roll);
+    meta.append(roll);
+    row.append(img, meta);
+    body.append(row);
+    return { c, img, st, roll };
+  });
+  $('castShotStatus').textContent =
+    `${missing.length} of ${todo.length} without a portrait`;
+  $('castShotDlg').showModal();
+}
+
+async function drawOne(c, img, st, roll) {
+  roll.disabled = true;
+  st.textContent = 'queued\u2026';
+  try {
+    const { token } = await api('/api/candidates', { prompt: c.prompt, n: 1 });
+    await new Promise((resolve) => {
+      const t = setInterval(async () => {
+        let d;
+        try { d = await api('/api/candidates?token=' + encodeURIComponent(token)); }
+        catch { return; }
+        if (d.error) { clearInterval(t); st.textContent = d.error; resolve(); return; }
+        if (!d.done) { st.textContent = `drawing\u2026 ${d.elapsed}s`; return; }
+        clearInterval(t);
+        const r = await api('/api/cast-portrait',
+          { story: ED.id, name: c.name, candidate: d.images[0] });
+        c.portrait = r.portrait;
+        img.innerHTML = '';
+        const i = el('img');
+        i.src = r.url + '?t=' + Date.now();
+        img.append(i);
+        st.textContent = 'done';
+        roll.textContent = 'Re-roll';
+        // Written straight to the story file: the portrait is already on disk and
+        // a cast entry pointing at nothing would be worse than an extra save.
+        await api('/api/story/save', edPayload());
+        ED.dirty = false;
+        resolve();
+      }, 3000);
+      CASTSHOT.timers.push(t);
+    });
+  } catch (e) { st.textContent = e.message; }
+  roll.disabled = false;
+}
+
 async function saveStory() {
   $('edStatus').textContent = 'saving…';
   try {
@@ -2702,6 +2692,7 @@ async function saveStory() {
     showProblems([], true, v && v.fit);
     renderEditor();
     setTimeout(() => { $('edStatus').textContent = ''; }, 2000);
+    offerCastPortraits();
   } catch (e) {
     $('edStatus').textContent = '';
     // The server reports every problem at once; prefer that structured list to
@@ -2991,6 +2982,14 @@ $('setBack').onclick = async () => {
 $('setSave').onclick = saveSettings;
 $('adviseGo').onclick = askAdvisor;
 $('adviseInput').onkeydown = (e) => { if (e.key === 'Enter') askAdvisor(); };
+$('castShotClose').onclick = () => {
+  CASTSHOT.timers.forEach(clearInterval); CASTSHOT.timers = [];
+  $('castShotDlg').close();
+};
+$('castShotGo').onclick = () => {
+  CASTSHOT.rows.filter((r) => !r.c.portrait)
+    .forEach((r) => drawOne(r.c, r.img, r.st, r.roll));
+};
 $('rulesCancel').onclick = () => $('rulesDlg').close();
 $('rulesReplace').onclick = () => applyRules('replace');
 $('rulesAppend').onclick = () => applyRules('append');
