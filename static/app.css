@@ -719,12 +719,16 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
 /* An attributed spoken line: the speaker's portrait, then the line itself. The
    portrait is an enrichment -- a speaker without one still gets the attributed
    line, because the format earns its place on its own. */
-.speak { margin: 18px 0; }
+.speak { display: flex; align-items: center; gap: 14px; margin: 18px 0; }
 .speak img {
-  display: block; width: 100%; max-width: 520px; border-radius: var(--radius);
-  border: 1px solid var(--line); cursor: zoom-in; margin-bottom: 10px;
+  flex: 0 0 104px; width: 104px; aspect-ratio: 3/4; object-fit: cover;
+  /* Weighted up the frame: a portrait's face sits above centre, and a centred
+     crop of a 3:4 image cuts it in half. */
+  object-position: 50% 18%;
+  border-radius: var(--radius); border: 1px solid var(--line);
+  cursor: zoom-in; display: block; margin: 0;
 }
-.speakLine { line-height: 1.6; }
+.speakLine { flex: 1; min-width: 0; line-height: 1.6; }
 .speakWho { font-weight: 700; }
 .speakWho::after { content: ' | '; font-weight: 400; opacity: .45; }
 .para { margin: 0 0 1em; }
@@ -925,6 +929,10 @@ input[type=number]::-webkit-outer-spin-button {
   .advisor { left: 10px; bottom: 10px; }
   .advisePanel { width: calc(100vw - 20px); }
   .adviseLog { max-height: 50vh; }
+
+  /* Narrower on a phone, where 104px of a 390px line is a third of the width. */
+  .speak { gap: 10px; }
+  .speak img { flex: 0 0 76px; width: 76px; }
 
   .composer { padding: 10px 12px; gap: 8px; }
   .composer button { padding: 0 16px; }
