@@ -88,7 +88,12 @@ def session_state(session_id: int) -> dict[str, Any]:
         # Name, descriptor and aliases only — the image prompt is tag soup and
         # would just be noise in the UI.
         "cast": [
-            {"name": c["name"], "short": c.get("short", ""), "aliases": c.get("aliases", [])}
+            {"name": c["name"], "short": c.get("short", ""),
+             "aliases": c.get("aliases", []),
+             # The story's own portrait, which exists from the moment the cast was
+             # written rather than waiting for a turn to generate one.
+             "portrait": (f"/story-img/{st['id']}/{c['portrait']}"
+                          if c.get("portrait") else None)}
             for c in st.get("cast", [])
         ],
         "portrait_prompts": {

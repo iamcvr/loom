@@ -596,14 +596,24 @@ function portraitFor(name) {
   // therefore the portrait is filed under "John James". Exact, then case-insensitive,
   // then first name. Without the fallback every attributed line would have to spell
   // out a full name, and nobody speaks like that.
-  const shots = (S.state?.media || []).filter((x) => x.kind === 'portrait');
+  //
+  // Both sources are searched: portraits generated during play, and the story's own
+  // cast portraits, which exist before any turn has been taken.
   const want = name.trim().toLowerCase();
-  const by = (fn) => shots.filter(fn);
+  const pool = [
+    ...(S.state?.media || [])
+      .filter((x) => x.kind === 'portrait')
+      .map((x) => ({ subject: x.subject, url: '/media/' + x.path })),
+    ...(S.state?.cast || [])
+      .filter((c) => c.portrait)
+      .map((c) => ({ subject: c.name, url: c.portrait })),
+  ];
+  const by = (fn) => pool.filter(fn);
   const hits = by((x) => x.subject === name.trim());
-  const ci   = hits.length ? hits : by((x) => (x.subject || '').toLowerCase() === want);
+  const ci = hits.length ? hits : by((x) => (x.subject || '').toLowerCase() === want);
   const first = ci.length ? ci
     : by((x) => (x.subject || '').toLowerCase().split(/\s+/)[0] === want);
-  return first.length ? '/media/' + first[first.length - 1].path : null;
+  return first.length ? first[first.length - 1].url : null;
 }
 
 
@@ -815,16 +825,28 @@ async function setGoal(id, status) {
 /* One list of who exists, built once and used by both the side panel and the
    expanded pane, so the two can never disagree about who is on stage. */
 function castRoster(state) {
-  const portraits = {};
+  // Session portraits: generated during play, keyed by subject.
+  const shot = {};
   (state.media || []).filter((m) => m.kind === 'portrait')
-    .forEach((m) => { if (!portraits[m.subject]) portraits[m.subject] = m.path; });
+    .forEach((m) => { if (!shot[m.subject]) shot[m.subject] = '/media/' + m.path; });
+
+  // The story's own cast, which exists before the first turn does. Without this the
+  // panel stayed empty until something had happened, even though the characters had
+  // been written and drawn already.
+  const story = {};
+  (state.cast || []).forEach((c) => { if (c.portrait) story[c.name] = c.portrait; });
 
   const rels = Object.fromEntries((state.relationships || []).map((r) => [r.name, r.summary]));
   const shorts = Object.fromEntries((state.cast || []).map((c) => [c.name, c.short]));
+  const names = [...new Set([
+    ...(state.cast || []).map((c) => c.name),
+    ...Object.keys(rels), ...Object.keys(shot),
+  ])].filter(Boolean);
 
-  return [...new Set([...Object.keys(rels), ...Object.keys(portraits)])].map((name) => ({
+  return names.map((name) => ({
     name,
-    portrait: portraits[name] ? '/media/' + portraits[name] : null,
+    // A portrait generated in play wins: it is the more recent intent.
+    portrait: shot[name] || story[name] || null,
     summary: rels[name] || '',
     short: shorts[name] || '',
   }));
