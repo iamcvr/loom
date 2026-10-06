@@ -15,6 +15,34 @@ to send them.
 
 ---
 
+## Before you rely on this
+
+**loom is mostly vibe-coded.** It was written conversationally with an LLM, by one
+person, for their own use, and it is published because it works for them rather than
+because it has been hardened for anyone else. Specifically:
+
+- **There are no tests.** Not few — none. Every claim in this README was verified by
+  running the thing and looking, which catches what you thought to check and nothing
+  else.
+- **The comments explain their reasoning, and the reasoning has sometimes been
+  wrong.** A lot of them record a measurement that overturned an earlier assumption,
+  which is the useful kind. Some of them were confidently wrong until something
+  broke. Treat a comment as evidence of what someone believed, not proof that it
+  holds.
+- **It has not been security-reviewed.** It is a local single-user server with no
+  authentication, and it is built on the assumption that the only person reaching it
+  is the person running it. Do not expose it to a network you do not trust.
+- **The data model has one migration mechanism and it only adds columns.** Schema
+  changes that are not additive have no story.
+- **Defaults are tuned against one author's hardware and one author's taste.** They
+  are documented where they came from so you can disagree with them specifically.
+
+None of that is an apology for the design — the context-budget arbiter, the single
+structured call per turn, and the measurements behind both are the parts worth
+reading. It is a warning about the engineering around it.
+
+---
+
 ## The idea in one paragraph
 
 Every turn, exactly one system decides what earns a slot in the context window,
