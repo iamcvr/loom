@@ -2565,6 +2565,7 @@ function secCast(d) {
           req: true,
           hint: 'Image tags, not prose. Quality tags and image style are added for you.',
         }),
+        castPortraitRow(c),
       ],
     }),
   ];
@@ -2663,6 +2664,48 @@ function setCastShot(slot, url, name) {
   i.title = 'Click to see it full size';
   i.onclick = () => lightbox(url, name);
   slot.append(i);
+}
+
+/* The portrait on a cast card: see it, re-roll it, remove it. The dialog after a
+   save is the first pass; this is where it is lived with afterwards. Both call
+   drawOne, so a re-roll here and a re-roll there do exactly the same thing. */
+function castPortraitRow(c) {
+  const wrap = el('div', 'castShotRow');
+  const img = el('div', 'castShotImg');
+  const meta = el('div', 'castShotMeta');
+  const st = el('div', 'muted small', c.portrait ? '' : 'no portrait yet');
+  const btns = el('div', 'castShotBtns');
+  const roll = el('button', 'ghost', c.portrait ? 'Re-roll' : 'Draw');
+  const del = el('button', 'ghost danger', 'Remove');
+
+  const paint = () => {
+    img.innerHTML = '';
+    if (c.portrait && ED.id) {
+      setCastShot(img, `/story-img/${ED.id}/${c.portrait}?t=` + Date.now(), c.name);
+    }
+    roll.textContent = c.portrait ? 'Re-roll' : 'Draw';
+    del.classList.toggle('hidden', !c.portrait);
+  };
+
+  roll.onclick = async () => { await drawOne(c, img, st, roll); paint(); };
+  del.onclick = async () => {
+    if (!await ask(`Remove ${c.name || 'this character'}'s portrait?`, 'Remove')) return;
+    const gone = c.portrait;
+    c.portrait = '';
+    paint();
+    touch();
+    st.textContent = 'removed';
+    // The file goes too. A story folder quietly accumulating 1.3 MB images that
+    // nothing references is the kind of mess nobody finds until it is large.
+    if (ED.id && gone) await api('/api/cast-portrait/delete',
+                                { story: ED.id, portrait: gone }).catch(() => {});
+  };
+
+  btns.append(roll, del);
+  meta.append(st, btns);
+  wrap.append(img, meta);
+  paint();
+  return wrap;
 }
 
 async function drawOne(c, img, st, roll) {

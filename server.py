@@ -680,6 +680,9 @@ class Handler(BaseHTTPRequestHandler):
                     str(body.get("prompt") or "").strip(),
                     n=max(1, min(6, int(body.get("n") or 4))),
                     negative=str(body.get("negative") or ""))})
+            elif path == "/api/cast-portrait/delete":
+                self._json(story_mod.drop_portrait(
+                    str(body.get("story") or ""), str(body.get("portrait") or "")))
             elif path == "/api/cast-portrait":
                 # Copies a candidate out of the shared media directory and into the
                 # story's own folder, where it belongs to the story rather than to

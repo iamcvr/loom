@@ -733,6 +733,25 @@ def adopt_portrait(story_id: str, name: str, candidate: str) -> dict:
     return {"portrait": fname, "url": f"/story-img/{sid}/{fname}"}
 
 
+def drop_portrait(story_id: str, filename: str) -> dict:
+    """Delete a cast portrait from a story's folder.
+
+    Only ever removes a file inside stories/<id>/portraits/, resolved first so a
+    name containing "../" cannot reach anything else. A missing file is success:
+    the caller wants it gone and it is gone.
+    """
+    sid = check_id(story_id)
+    root = (STORIES_DIR / sid / "portraits").resolve()
+    p = (root / filename).resolve()
+    if not str(p).startswith(str(root)):
+        raise StoryError(sid, ["bad portrait path"])
+    try:
+        p.unlink()
+    except FileNotFoundError:
+        pass
+    return {"ok": True}
+
+
 def _slug_name(name: str) -> str:
     """Filename fragment for a character name. Mirrors images._slug."""
     import unicodedata
