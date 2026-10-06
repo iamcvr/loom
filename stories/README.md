@@ -11,10 +11,10 @@ The directory name is the story id. It is validated, never sanitised
 with a letter or digit, at most 64 characters. `stories/my-story/story.yaml`
 gives you a story with id `my-story`.
 
-**Do not want to write one by hand?** [`INTERVIEW.md`](INTERVIEW.md) is a prompt you
-paste into any capable model. It interviews you — sixteen questions about tone, cast,
-pacing and stakes — and writes the `story.yaml` for you. The schema below is still
-worth reading afterwards, because you will want to edit what it produces.
+**You do not have to write every field from scratch.** In the editor, the Rules field
+has a twelve-question builder above it, and World details has a button that rewrites
+whatever you typed -- a line or a page -- into what the narrator reads well. Both write
+ordinary text you can then edit.
 
 **`seiran` ships with loom as a worked example.** It is a finished story rather than
 a template — 5,207 characters of rules, fifteen cast members, a lorebook, a stat and

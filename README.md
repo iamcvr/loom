@@ -10,7 +10,7 @@ a local ollama or any OpenAI-compatible server, images from a local
 stable-diffusion.cpp. There are no API keys to configure because there is nowhere
 to send them.
 
-**Writing stories:** [`stories/README.md`](stories/README.md), or have a model interview you and write one — [`stories/INTERVIEW.md`](stories/INTERVIEW.md).
+**Writing stories:** [`stories/README.md`](stories/README.md).
 **What is measured, and what it cost:** [`MEASUREMENTS.md`](MEASUREMENTS.md).
 
 ---
