@@ -787,9 +787,6 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
    the button never appeared at all. */
 @media (max-width: 860px) { .panelsClose { display: block; } }
 
-
-}
-
 .advisor { position: fixed; left: 14px; bottom: 14px; z-index: 60; }
 .advisor.collapsed .advisePanel { display: none; }
 .advisor:not(.collapsed) .adviseBubble { display: none; }
@@ -857,6 +854,7 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
 @media (max-width: 860px) {
   #btnSettings2 { display: none; }
   .advisor { display: none; }
+}
 
 /* Destructive, so it should not look like Duplicate. */
 button.danger { color: #c0562a; }
