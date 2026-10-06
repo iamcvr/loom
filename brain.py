@@ -248,7 +248,8 @@ def prose(
 # ---------------------------------------------------------------- utility
 
 
-def utility(prompt: str, schema: dict, *, spec: Optional[dict] = None) -> dict:
+def utility(prompt: str, schema: dict, *, spec: Optional[dict] = None,
+            timeout: Optional[int] = None) -> dict:
     """One structured call. Returns a dict matching `schema`.
 
     Uses provider-native structured output so the result is guaranteed parseable
@@ -267,7 +268,8 @@ def utility(prompt: str, schema: dict, *, spec: Optional[dict] = None) -> dict:
             "options": {"temperature": spec.get("temperature", 0.3),
                         "num_ctx": spec.get("num_ctx", 8192),
                         "num_predict": spec.get("max_tokens", 1500)},
-        }, {"content-type": "application/json"})
+        }, {"content-type": "application/json"},
+           **({"timeout": timeout} if timeout else {}))
         body = (data.get("message") or {}).get("content") or ""
         try:
             return json.loads(body)

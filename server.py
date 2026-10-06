@@ -34,6 +34,7 @@ import chapters as chapters_mod
 import config
 import images
 import ledger as ledger_mod
+import interview as interview_mod
 import memory
 import rulebuilder
 import settings
@@ -720,6 +721,16 @@ class Handler(BaseHTTPRequestHandler):
                     str(body.get("prompt") or "").strip(),
                     n=max(1, min(6, int(body.get("n") or 4))),
                     negative=str(body.get("negative") or ""))})
+            elif path == "/api/interview":
+                # One turn of the interview. Small schema, short call.
+                self._json(interview_mod.ask(body.get("history") or []))
+            elif path == "/api/interview/compose":
+                # The expensive one, run once. Returns a story the EDITOR loads --
+                # nothing is written to disk here, so the author reads it first.
+                d = interview_mod.compose(body.get("history") or [])
+                raw = interview_mod.to_story(d)
+                checked, problems = story_mod._validate(raw, "draft")
+                self._json({"story": raw, "problems": problems})
             elif path == "/api/cast-portrait/delete":
                 self._json(story_mod.drop_portrait(
                     str(body.get("story") or ""), str(body.get("portrait") or "")))

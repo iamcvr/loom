@@ -1,4 +1,9 @@
-# Simple mode — have an AI interview you and write the story file
+# Have an AI interview you and write the story file
+
+> **loom does this itself now.** The boot screen's **+ Interview me** runs the same
+> interview against your own model and drops the result straight into the editor.
+> This file is for using a larger model than you run locally, or for working on a
+> story away from the machine loom is on.
 
 Paste everything below the line into a capable model (Claude, GPT, whatever you
 have). It will ask you a short series of questions and then produce a complete

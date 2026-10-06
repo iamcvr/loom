@@ -867,6 +867,23 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
 }
 .setupFoot { display: flex; align-items: center; gap: 10px; margin-top: 20px; }
 
+/* Simple mode: the engine interviews the author. */
+.ivDlg { width: min(680px, 94vw); max-height: 88vh; display: flex; flex-direction: column; }
+.ivBody { flex: 1; min-height: 240px; overflow-y: auto; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 14px; }
+.ivMsg { display: flex; flex-direction: column; gap: 3px; }
+.ivWho { font-size: 10.5px; text-transform: uppercase; letter-spacing: .12em;
+  color: var(--muted); font-weight: 600; }
+.iv-user .ivWho { color: var(--accent2); }
+.ivText { line-height: 1.6; white-space: pre-wrap; }
+.ivRow { display: flex; gap: 8px; padding: 0 16px 12px; }
+.ivRow textarea {
+  flex: 1; resize: none; background: var(--bg3); color: var(--fg);
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 9px 11px;
+  font: inherit;
+}
+.ivRow textarea:focus { outline: none; border-color: var(--accent); }
+
 #btnSettings2 { display: none; }
 .advisor { display: none; }
 

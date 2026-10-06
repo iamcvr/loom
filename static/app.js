@@ -228,6 +228,15 @@ async function boot() {
     sw.append(c);
   });
 
+  // Two ways in, and the interview is listed first on purpose: writing one from
+  // scratch means producing several thousand characters of craft before playing a
+  // single turn, which is the harder path even when you know what you want.
+  const iv = el('div', 'card');
+  iv.append(el('b', null, '+ Interview me'),
+            el('span', 'muted small', 'Answer a few questions and it writes the story'));
+  iv.onclick = openInterview;
+  sw.append(iv);
+
   const add = el('div', 'card');
   add.append(el('b', null, '+ New story'),
              el('span', 'muted small', 'Write one from scratch'));
@@ -2371,6 +2380,99 @@ async function newStory() {
   showEditor();
 }
 
+/* Simple mode. Writing a story by hand asks for several thousand characters of
+   specific craft before anyone has played a turn; most people cannot, and a vague
+   ruleset produces vague stories forever. So the engine asks instead, using the same
+   model that will narrate it.
+
+   What comes back is a PROPOSAL: it fills the editor and is not saved. */
+
+const IV = { history: [], ready: false, busy: false };
+
+function openInterview() {
+  IV.history = [];
+  IV.ready = false;
+  $('ivBody').innerHTML = '';
+  $('ivWrite').disabled = true;
+  $('ivStatus').textContent = '';
+  ivSay('assistant', 'Tell me about the story you want to play in. Where is it, when, '
+    + 'and who are you in it? A sentence is enough to start.');
+  $('ivDlg').showModal();
+  $('ivInput').focus();
+}
+
+function ivSay(role, text) {
+  const b = $('ivBody');
+  const n = el('div', 'ivMsg iv-' + role);
+  n.append(el('div', 'ivWho', role === 'user' ? 'You' : 'loom'));
+  const body = el('div', 'ivText');
+  formatInto(body, text);
+  n.append(body);
+  b.append(n);
+  b.scrollTop = b.scrollHeight;
+}
+
+async function ivTurn() {
+  const t = $('ivInput').value.trim();
+  if (!t || IV.busy) return;
+  $('ivInput').value = '';
+  ivSay('user', t);
+  IV.history.push({ role: 'user', text: t });
+  IV.busy = true;
+  $('ivSend').disabled = true;
+  $('ivStatus').textContent = 'thinking\u2026';
+  try {
+    const r = await api('/api/interview', { history: IV.history });
+    const said = [r.reply, ...(r.questions || [])].filter(Boolean).join('\n\n');
+    ivSay('assistant', said || '(no reply)');
+    IV.history.push({ role: 'assistant', text: said });
+    IV.ready = !!r.ready;
+    $('ivWrite').disabled = !IV.ready;
+    // Enabled early on purpose: someone who has said enough should not be made to
+    // answer more, and the model is cautious about declaring itself ready.
+    if (IV.history.filter((m) => m.role === 'user').length >= 2) $('ivWrite').disabled = false;
+    $('ivStatus').textContent = IV.ready ? 'ready when you are' : '';
+  } catch (e) {
+    $('ivStatus').textContent = e.message;
+  }
+  IV.busy = false;
+  $('ivSend').disabled = false;
+}
+
+async function ivWrite() {
+  if (IV.busy) return;
+  IV.busy = true;
+  $('ivWrite').disabled = true;
+  $('ivSend').disabled = true;
+  // Minutes, not seconds: it is several thousand characters of structured output on
+  // a local model. Saying so beats a spinner that looks hung.
+  let secs = 0;
+  $('ivStatus').textContent = 'writing it\u2026 this takes a few minutes';
+  const tick = setInterval(() => {
+    secs += 1;
+    $('ivStatus').textContent = `writing it\u2026 ${secs}s (a few minutes is normal)`;
+  }, 1000);
+  try {
+    const r = await api('/api/interview/compose', { history: IV.history });
+    clearInterval(tick);
+    ED.data = { ...(await api('/api/story/new')), ...r.story };
+    ED.isNew = true;
+    ED.idTouched = false;
+    ED.dirty = true;
+    ED.section = 'Story';
+    $('ivDlg').close();
+    showEditor();
+    if (r.problems?.length) showProblems(r.problems);
+    $('edStatus').textContent = 'drafted \u2014 read it, change it, then Save';
+  } catch (e) {
+    clearInterval(tick);
+    $('ivStatus').textContent = e.message;
+    $('ivWrite').disabled = false;
+    $('ivSend').disabled = false;
+  }
+  IV.busy = false;
+}
+
 async function editStory(id) {
   ED.data = await api('/api/story/' + id);
   ED.id = id;
@@ -3242,6 +3344,12 @@ $('setBack').onclick = async () => {
 $('setSave').onclick = saveSettings;
 $('adviseGo').onclick = askAdvisor;
 $('adviseInput').onkeydown = (e) => { if (e.key === 'Enter') askAdvisor(); };
+$('ivClose').onclick = () => $('ivDlg').close();
+$('ivSend').onclick = ivTurn;
+$('ivWrite').onclick = ivWrite;
+$('ivInput').onkeydown = (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) ivTurn();
+};
 $('castShotClose').onclick = () => {
   CASTSHOT.timers.forEach(clearInterval); CASTSHOT.timers = [];
   $('castShotDlg').close();
