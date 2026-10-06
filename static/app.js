@@ -2387,10 +2387,11 @@ async function newStory() {
 
    What comes back is a PROPOSAL: it fills the editor and is not saved. */
 
-const IV = { history: [], ready: false, busy: false };
+const IV = { history: [], learned: [], ready: false, busy: false };
 
 function openInterview() {
   IV.history = [];
+  IV.learned = [];
   IV.ready = false;
   $('ivBody').innerHTML = '';
   $('ivWrite').disabled = true;
@@ -2431,12 +2432,14 @@ async function ivTurn() {
   $('ivSend').disabled = true;
   $('ivStatus').textContent = 'thinking\u2026';
   try {
-    const r = await api('/api/interview', { history: IV.history });
+    const r = await api('/api/interview',
+      { history: IV.history, learned: IV.learned });
     const said = [r.reply, ...(r.questions || [])].filter(Boolean).join('\n\n');
     ivSay('assistant', said || '(no reply)');
     // What it believes it has, shown so it can be corrected. Writing this is what
     // stops it re-asking answered questions, so the author may as well see it.
-    ivKnown(r.learned || []);
+    IV.learned = r.learned || IV.learned;
+    ivKnown(IV.learned);
     IV.history.push({ role: 'assistant', text: said });
     IV.ready = !!r.ready;
     $('ivWrite').disabled = !IV.ready;

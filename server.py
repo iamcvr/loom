@@ -723,7 +723,8 @@ class Handler(BaseHTTPRequestHandler):
                     negative=str(body.get("negative") or ""))})
             elif path == "/api/interview":
                 # One turn of the interview. Small schema, short call.
-                self._json(interview_mod.ask(body.get("history") or []))
+                self._json(interview_mod.ask(body.get("history") or [],
+                                             body.get("learned") or []))
             elif path == "/api/interview/compose":
                 # The expensive one, run once. Returns a story the EDITOR loads --
                 # nothing is written to disk here, so the author reads it first.

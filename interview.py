@@ -19,7 +19,7 @@ change, exactly like the settings advisor's diff; nothing is saved by this modul
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 import brain
 import config
@@ -34,7 +34,7 @@ ASK_SCHEMA: dict[str, Any] = {
         # -- a rich two-paragraph answer covering tone, cast and setting produced the
         # same three questions again on the next turn. Making it write down what it
         # now knows, before it is allowed to ask anything, is what breaks the loop.
-        "learned": {"type": "array", "maxItems": 10, "items": {"type": "string"}},
+        "learned": {"type": "array", "maxItems": 7, "items": {"type": "string"}},
         "still_needed": {"type": "array", "maxItems": 5, "items": {"type": "string"}},
         "reply": {"type": "string"},
         "questions": {"type": "array", "maxItems": 3, "items": {"type": "string"}},
@@ -104,23 +104,44 @@ so they can correct you before anything is written.
 
 %s
 
-The conversation so far:
-%s""" % (_ALREADY_HANDLED, "%s")
+WHAT YOU ALREADY KNOW (carry all of it forward into `learned`, and never ask about any
+of it again):
+%s
+
+THE LAST THING THEY SAID:
+%s""" % (_ALREADY_HANDLED, "%s", "%s")
 
 
 def _transcript(history: list[dict]) -> str:
+    """Only what the author has said. Used by compose(), which runs once."""
     if not history:
-        return "(nothing yet -- open the interview)"
-    out = []
-    for m in history:
-        who = "AUTHOR" if m.get("role") == "user" else "YOU"
-        out.append(f"{who}: {(m.get('text') or '').strip()}")
-    return "\n\n".join(out)
+        return "(nothing yet)"
+    return "\n\n".join(
+        f"{'AUTHOR' if m.get('role') == 'user' else 'YOU'}: {(m.get('text') or '').strip()}"
+        for m in history)
 
 
-def ask(history: list[dict]) -> dict:
-    """One turn of the interview."""
-    out = brain.utility(_INTERVIEW % _transcript(history), ASK_SCHEMA)
+def ask(history: list[dict], learned: Optional[list[str]] = None) -> dict:
+    """One turn of the interview.
+
+    Takes the running `learned` summary and the author's LAST message, not the whole
+    conversation. Resending the transcript made every turn more expensive than the
+    one before it -- a longer prompt to process and more to carry forward -- until a
+    turn exceeded brain.py's 180s timeout and the interview died mid-conversation.
+
+    `learned` is the model's own summary of what it has been told, so using it here
+    is compaction of exactly the kind the engine does to stories: the earlier turns
+    are already represented, and resending them says the same thing twice at
+    increasing cost.
+    """
+    last = ""
+    for m in reversed(history or []):
+        if m.get("role") == "user":
+            last = (m.get("text") or "").strip()
+            break
+    known = "\n".join(f"- {x}" for x in (learned or [])) or "(nothing yet)"
+    out = brain.utility(_INTERVIEW % (known, last or "(they have not said anything yet)"),
+                        ASK_SCHEMA, timeout=300)
     # `learned` is returned, not just required. Writing it is what stops the model
     # re-asking answered questions, and it costs real time -- about 46s a turn
     # against 8s without it. Showing it back makes that a running summary the author
