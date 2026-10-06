@@ -787,21 +787,7 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
    the button never appeared at all. */
 @media (max-width: 860px) { .panelsClose { display: block; } }
 
-/* Hidden once the layout goes narrow -- the same width at which the side panel
-   becomes a drawer -- rather than only at phone width, because a tablet in portrait
-   has the same problem.
 
-   The gear opens a screen of fifty-five knobs with help text, and the advisor is a
-   floating panel whose whole job is reading a proposed diff against those knobs and
-   deciding on it. Neither is a thing anyone does on a narrow screen, and both cost
-   space on one. Settings stay reachable from the story list.
-
-   This block sits AFTER `.advisor`'s own rule on purpose. The 860px block near the
-   top of the file is 250 lines above it, where `display: none` at equal specificity
-   would simply lose. */
-@media (max-width: 860px) {
-  #btnSettings2 { display: none; }
-  .advisor { display: none; }
 }
 
 .advisor { position: fixed; left: 14px; bottom: 14px; z-index: 60; }
@@ -855,6 +841,22 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
    together rather than the claim alone. */
 .adviseCard .docs { opacity: .55; font-style: italic; }
 .adviseCard .dead { opacity: .6; text-decoration: line-through; }
+
+/* Hidden once the layout goes narrow -- the same width at which the side panel
+   becomes a drawer -- rather than only at phone width, because a tablet in portrait
+   has the same problem.
+
+   The gear opens a screen of fifty-five knobs with help text, and the advisor is a
+   floating panel whose whole job is reading a proposed diff against those knobs and
+   deciding on it. Neither is a thing anyone does on a narrow screen, and both cost
+   space on one. Settings stay reachable from the story list.
+
+   This block sits AFTER `.advisor`'s own rule on purpose. The 860px block near the
+   top of the file is 250 lines above it, where `display: none` at equal specificity
+   would simply lose. */
+@media (max-width: 860px) {
+  #btnSettings2 { display: none; }
+  .advisor { display: none; }
 
 /* Destructive, so it should not look like Duplicate. */
 button.danger { color: #c0562a; }
