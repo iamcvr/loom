@@ -17,8 +17,17 @@ changing shape underneath them.
 
 ## v1 — finish the engine
 
-Nothing left. §§1-5 and 9 are in Done below; the engine work is complete and
-the three remaining v1 items are the documentation ones, deliberately last.
+Engine work is complete (§§1-5 and 9, in Done below), and v1.1, v1.2 and v1.4 have
+landed since. What stands between here and a release candidate is the documentation,
+the mobile pass, and one default that is wrong out of the box.
+
+**Blocker for a fresh clone (§8):** the shipped defaults are `num_ctx` 8192 with
+`max_tokens` 4000, leaving 12,544 characters of budget against layer floors needing
+15,600. `settings.update()` validates the whole state, so a new install cannot save
+ANY setting until this changes. 4000 is the wrong number regardless — measured
+replies average about 700 tokens and never reached a 1,200 ceiling across twelve
+turns, so the default reserves six times what replies use out of the smallest window
+loom ships with.
 
 ---
 
@@ -26,10 +35,21 @@ the three remaining v1 items are the documentation ones, deliberately last.
 
 ### 6. Repo hygiene
 
-- `__pycache__/` is untracked but not ignored — needs a `.gitignore`
+- ~~`__pycache__/` needs a `.gitignore`~~ — done
+- ~~no git remote configured~~ — done
 - `story.py:628` cites `~/Projects/CLAUDE.md` in a docstring: a local dev
   artifact that will mean nothing to anyone else
-- **no git remote configured** — versioning is local-only
+
+### 10. Mobile
+
+The phone pass on 2026-10-05 fixed the structural faults: the settings nav ate half
+the screen, fixed widths overflowed, dialogs were letterboxed, tap targets were
+mouse-sized, and a dialog body scrolled the page behind it instead of itself.
+
+What is left is not a known list. It is every screen that has never been opened on a
+phone — the editor's repeatable sections, the chapter and lorebook dialogs, the
+ledger, the arc pane, and the portrait rows added since. That needs a pass with a
+phone in hand, screen by screen, rather than another guess from the stylesheet.
 
 ---
 
@@ -211,7 +231,7 @@ returns to for weeks, rather than a character they try for two days and replace.
 That is what justifies a long setup — a cast with one portrait each does not sell
 "these are real people"; a cast with a full expression set does.
 
-## v1.1 — the settings assistant
+## v1.1 — the settings assistant — DONE
 
 Natural-language intent to settings changes: "I want more creative prose", "longer
 replies". The parts already exist — `settings.current()` returns all 55 knobs with
@@ -232,7 +252,18 @@ Scope it hard: settings only. Read-only on stories and the database.
 Uses the configured prose model — a GGUF cannot ship in a repo, and the model is
 already resident, so this costs no extra memory and no extra download.
 
-## v1.2 — character sprites and per-line faces
+## v1.2 — character sprites and per-line faces — LARGELY DONE
+
+Shipped: identity proven without a face embedding; stable-diffusion.cpp behind
+/sdapi/v1; portraits chosen at story-save and at character creation and managed from
+the cast card; attributed dialogue in CORE_RULES with the speaker's face beside the
+line; the cast on screen before the first turn.
+
+Still open: expression SETS, deferred on purpose — a mood set needs a stored
+per-character seed so the faces stay the same person between expressions, and for now
+a face you dislike is re-rolled on the spot. And a story's `checkpoint` field is
+accepted and ignored, because an sd-server process loads one model at startup and
+/sdapi/v1 cannot switch it per request.
 
 ### What already exists
 
@@ -515,7 +546,7 @@ story restating. Build it once and the memory simplification comes nearly free.
 - Changing memory architecture against existing stories risks regressions that only
   show up in prose quality, which is the hardest thing here to measure.
 
-## v1.4 — help the user write the rules
+## v1.4 — help the user write the rules — DONE
 
 The premise, from the author: *"the average user is probably going to be very, very
 simplistic in what they denote for the world, the rules, the characters."* Seiran's
