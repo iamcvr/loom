@@ -760,10 +760,6 @@ must come *after* their exact-match siblings (`/api/story/new`).
   can be replayed without a model call, `assemble.allocate` is a pure function over
   a dict of lists, and `rulebuilder.build` is pure. Those three are where a first
   test suite would pay for itself immediately.
-- **The shipped defaults do not fit.** `num_ctx` 8192 with `max_tokens` 4000 leaves
-  less budget than the layer floors need, and `settings.update()` validates the
-  whole state — so a fresh clone cannot save any setting until this is changed.
-  See [`TODO.md`](TODO.md) §8.
 - **There is no path from `git clone` to a working loom.** No model is configured
   out of the box and nothing says what to do about it.
 - **The action-pacing templates are story-specific** and hardcoded in `memory.py`.

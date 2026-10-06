@@ -239,8 +239,21 @@ PROSE = {
     # story looks like it developed amnesia and the model takes the blame. This
     # is sent per request so the budget and the context window cannot drift
     # apart. It must cover prompt AND generation, and every token of it is KV
-    # cache resident in VRAM: at 160KB/token on a 12B, 8192 is ~1.3GB.
-    "num_ctx": 8192,
+    # cache resident in VRAM: at 160KB/token on a 12B, this is ~2.6GB.
+    #
+    # 8192 did not fit loom's own prompt. The reply ceiling above is reserved out
+    # of this window and the remainder is the whole character budget, so 8192 with
+    # a 4000-token ceiling left 12,544 characters against layer floors needing
+    # 15,600 — and because settings.update() validates the entire state, a fresh
+    # install could not save ANY setting until someone raised this. The ceiling is
+    # not the thing to lower: 4000 was itself set after a measured turn was cut off
+    # mid-sentence at 2000. The window was simply too small for an engine with
+    # thirteen layers.
+    #
+    # 16384 leaves 37,059 characters, about 21k above the floors. It is also the
+    # first thing to lower on constrained hardware — halving it halves the KV
+    # cache, at the cost of how much story fits.
+    "num_ctx": 16384,
 }
 
 UTILITY = {

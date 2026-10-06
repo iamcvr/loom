@@ -17,23 +17,10 @@ changing shape underneath them.
 
 ## What is left
 
-Four items. The first is a bug that only a stranger hits; the rest are the
-documentation and polish that a release needs.
+Three items — the documentation and polish a release needs. The one actual bug,
+defaults that did not fit their own layer floors, is fixed and in Done below.
 
-### 1. The shipped defaults do not fit their own layer floors
-
-`num_ctx` 8192 with `max_tokens` 4000 leaves 12,544 characters of budget against
-layer floors needing 15,600. `settings.update()` validates the whole state, so a
-fresh clone **cannot save any setting at all** until this changes — which is the
-first thing a new user does, and it presents as "the app is broken".
-
-4000 is the wrong number regardless of the window. Measured replies average about
-700 tokens and never reached a 1,200 ceiling across twelve turns, so the default
-reserves roughly six times what replies actually use, out of the smallest window
-loom ships with. Fixing the reply ceiling fixes the arithmetic; raising the window
-as well is a separate judgement about what hardware to assume.
-
-### 2. First-install setup guide
+### 1. First-install setup guide
 
 **There is no path from `git clone` to a working loom.** `PROSE.model` and
 `UTILITY.model` default to `""` on purpose — no model name is right for every host
@@ -58,7 +45,7 @@ document? An unconfigured loom fails at the first turn with a provider error, wh
 is a poor first impression. A setup screen listing what ollama actually holds would
 beat any README section.
 
-### 3. Mobile
+### 2. Mobile
 
 The phone pass on 2026-10-05 fixed the structural faults: the settings nav ate half
 the screen, fixed widths overflowed, dialogs were letterboxed, tap targets were
@@ -69,7 +56,7 @@ phone — the editor's repeatable sections, the chapter and lorebook dialogs, th
 ledger, the arc pane, and the portrait rows added since. That needs a pass with a
 phone in hand, screen by screen, rather than another guess from the stylesheet.
 
-### 4. Repo hygiene
+### 3. Repo hygiene
 
 `story.py:628` cites a path under the author's home directory in a docstring, which
 will mean nothing to anyone else.
@@ -79,6 +66,25 @@ will mean nothing to anyone else.
 ## Done
 
 The numbering below is historical — these were §§1-9 when they were open.
+
+### ~~The shipped defaults did not fit their own layer floors~~ — 2026-10-06
+
+`num_ctx` 8192 with a 4000-token reply ceiling left 12,544 characters of budget
+against layer floors needing 15,600, and `settings.update()` validates the whole
+state — so a fresh clone could not save any setting at all. The first thing a new
+user does, failing in a way that reads as "the app is broken".
+
+The reply ceiling was NOT the thing to lower, despite an earlier note here claiming
+4000 was wrong regardless. It was set deliberately after a measured turn of a
+long-form story was cut off mid-sentence at 2000, because dialogue-heavy prose
+tokenises at about 2.7 characters per token. The measurement that said replies
+average 700 tokens came from stories asking for three to five paragraphs, and did
+not generalise.
+
+The window was simply too small for an engine with thirteen layers. 16384 leaves
+37,059 characters, about 21k above the floors, and costs roughly 2.6GB of KV cache
+on a 12B. Verified against an empty state directory: defaults now validate and a
+setting saves.
 
 ### ~~Final README pass~~ — 2026-10-05
 
