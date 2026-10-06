@@ -34,8 +34,19 @@ because it has been hardened for anyone else. Specifically:
   is the person running it. Do not expose it to a network you do not trust.
 - **The data model has one migration mechanism and it only adds columns.** Schema
   changes that are not additive have no story.
-- **Defaults are tuned against one author's hardware and one author's taste.** They
-  are documented where they came from so you can disagree with them specifically.
+- **Defaults are tuned against one machine and one author's taste.** That machine is
+  a GMKtec mini-PC with an AMD Ryzen AI MAX+ 395 (Strix Halo, 32 cores) and 128GB of
+  unified memory, whose Radeon 8060S iGPU reports as `gfx1151` — so the GPU draws on
+  system RAM rather than a separate pool, and both the language model and the image
+  model sit in it at once. Every number in
+  [`MEASUREMENTS.md`](MEASUREMENTS.md) comes off that box: 24B prose at Q6 in roughly
+  19GB, 43 seconds for a 768x1024 SDXL render, 3.15 characters per token.
+
+  That shape matters more than the speed. A machine with a discrete GPU has far less
+  memory for weights but much more bandwidth, and will land somewhere different —
+  image generation in particular was 2.5x faster on a 4070 in earlier measurements.
+  The defaults are documented where they came from so you can disagree with them
+  specifically rather than guess.
 
 None of that is an apology for the design — the context-budget arbiter, the single
 structured call per turn, and the measurements behind both are the parts worth
