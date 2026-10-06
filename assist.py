@@ -112,11 +112,12 @@ def improve(field: str, text: str, story: dict | None = None) -> str:
                                               "the story's name, tagline and rules)"),
     ])
     lo, hi = spec.get("paragraphs", (3, 8))
-    # Headroom over what the field should need. Hitting the cap does not truncate
-    # the prose, it truncates the JSON carrying it, so the whole call fails to parse
-    # -- the cost of being generous here is seconds, the cost of being tight is the
-    # author losing the whole wait.
+    # No token cap. There is nothing for one to do here that is not already done
+    # better by something else: the schema fixes the number of paragraphs, and
+    # num_ctx bounds the total. A cap on top of those cannot shorten the prose -- it
+    # can only stop mid-string and destroy the JSON carrying it, which is exactly
+    # what 1500 did. -1 is ollama for "until you are finished".
     out = brain.utility(prompt, _schema(lo, hi),
-                        spec={**config.UTILITY, "max_tokens": 2600}, timeout=300)
+                        spec={**config.UTILITY, "max_tokens": -1}, timeout=300)
     paras = [str(x).strip() for x in (out.get("paragraphs") or []) if str(x).strip()]
     return "\n\n".join(paras)
