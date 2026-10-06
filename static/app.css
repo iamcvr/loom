@@ -839,22 +839,15 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
 .adviseCard .docs { opacity: .55; font-style: italic; }
 .adviseCard .dead { opacity: .6; text-decoration: line-through; }
 
-/* Hidden once the layout goes narrow -- the same width at which the side panel
-   becomes a drawer -- rather than only at phone width, because a tablet in portrait
-   has the same problem.
+/* The gear and the settings advisor are hidden everywhere, not just on narrow
+   screens. Settings remain reachable from the story list, which is where you would
+   go to change them deliberately rather than mid-scene.
 
-   The gear opens a screen of fifty-five knobs with help text, and the advisor is a
-   floating panel whose whole job is reading a proposed diff against those knobs and
-   deciding on it. Neither is a thing anyone does on a narrow screen, and both cost
-   space on one. Settings stay reachable from the story list.
-
-   This block sits AFTER `.advisor`'s own rule on purpose. The 860px block near the
-   top of the file is 250 lines above it, where `display: none` at equal specificity
-   would simply lose. */
-@media (max-width: 860px) {
-  #btnSettings2 { display: none; }
-  .advisor { display: none; }
-}
+   The advisor still exists -- advisor.py, POST /api/advise and the panel markup are
+   all intact -- it simply has no way in. Deleting it is a separate decision; this is
+   the reversible half of it. */
+#btnSettings2 { display: none; }
+.advisor { display: none; }
 
 /* Destructive, so it should not look like Duplicate. */
 button.danger { color: #c0562a; }
