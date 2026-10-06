@@ -2744,7 +2744,8 @@ async function drawOne(c, img, st, roll) {
         if (!d.done) { st.textContent = `drawing\u2026 ${d.elapsed}s`; return; }
         clearInterval(t);
         const r = await api('/api/cast-portrait',
-          { story: ED.id, name: c.name, candidate: d.images[0] });
+          { story: ED.id, name: c.name, candidate: d.images[0],
+            previous: c.portrait || '' });
         c.portrait = r.portrait;
         setCastShot(img, r.url + '?t=' + Date.now(), c.name);
         st.textContent = 'done \u2014 click it to see it full size';

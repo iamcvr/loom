@@ -694,7 +694,8 @@ class Handler(BaseHTTPRequestHandler):
                 # whoever happened to generate it.
                 self._json(story_mod.adopt_portrait(
                     str(body.get("story") or ""), str(body.get("name") or ""),
-                    str(body.get("candidate") or "")))
+                    str(body.get("candidate") or ""),
+                    str(body.get("previous") or "")))
             elif path == "/api/rulebuilder":
                 # Generated server-side rather than in the browser, although the
                 # browser already has every fragment. build() enforces the one

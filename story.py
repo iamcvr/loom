@@ -714,7 +714,8 @@ def cast_member(story: dict, name: str) -> Optional[dict]:
     return None
 
 
-def adopt_portrait(story_id: str, name: str, candidate: str) -> dict:
+def adopt_portrait(story_id: str, name: str, candidate: str,
+                   previous: str = "") -> dict:
     """Move a generated candidate into a story's own portraits folder.
 
     Cast portraits belong to the story, not to a session: the story describes the
@@ -728,8 +729,15 @@ def adopt_portrait(story_id: str, name: str, candidate: str) -> dict:
         raise StoryError(sid, ["no such candidate image"])
     out_dir = STORIES_DIR / sid / "portraits"
     out_dir.mkdir(parents=True, exist_ok=True)
-    fname = f"{_slug_name(name)}.png"
+    # Timestamped rather than "<name>.png". A re-roll used to overwrite the file at
+    # the same URL, and /story-img serves a year-long Cache-Control, so every client
+    # that had already loaded the old one kept showing it -- the editor looked right
+    # only because it appends a cache-buster, and the panel and the transcript did
+    # not. A new name per image makes the long cache correct instead of a trap.
+    fname = f"{_slug_name(name)}_{int(time.time())}.png"
     shutil.copyfile(src, out_dir / fname)
+    if previous and previous != fname:
+        drop_portrait(sid, previous)
     return {"portrait": fname, "url": f"/story-img/{sid}/{fname}"}
 
 
