@@ -2299,7 +2299,7 @@ function secStory(d) {
   // story with swords and no magic should never raise the subject -- and a field
   // that is always on the screen teaches whoever is filling it in that they are
   // supposed to have an answer.
-  const powWrap = el('div', 'pcRow');
+  const powWrap = el('div', 'powRow');
   const powOn = el('input');
   powOn.type = 'checkbox';
   powOn.checked = !!d.power_label;

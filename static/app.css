@@ -497,6 +497,13 @@ button.primary:disabled { opacity: .35; cursor: default; }
 .fieldRow { display: flex; gap: 12px; }
 .fieldRow .field { flex: 1; }
 .fieldRow .field.narrow { flex: 0 0 110px; }
+/* Was using .pcRow, whose `input { flex: 1 }` is meant for the character sheet's
+   two side-by-side text boxes -- it stretched the checkbox across the row. */
+.powRow { display: flex; align-items: center; gap: 10px; }
+.powRow input[type=checkbox] {
+  flex: 0 0 auto; width: 17px; height: 17px; margin: 0; accent-color: var(--accent);
+}
+.powRow input[type=text] { flex: 1; min-width: 0; }
 .field.inline { display: flex; align-items: center; gap: 9px; }
 .field.inline > label { margin: 0; }
 .field.inline input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); }
