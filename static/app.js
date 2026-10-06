@@ -2899,8 +2899,10 @@ function castOffers(d) {
         ED.castOffer.push(...got);
         ED.castSeen.push(...got.map((p) => p.name));
         if (got.length) { renderEditor(); return; }
-        note.textContent = mode === 'story'
-          ? 'everyone you have written is already in the cast' : 'nothing came back';
+        // Only claim there is no one when the model's reply was actually read.
+        note.textContent = r.unreadable
+          ? 'the model\u2019s reply could not be read \u2014 try again'
+          : mode === 'story' ? 'found no one new to add' : 'nothing came back';
       } catch (e) {
         clearInterval(tick);
         note.textContent = e.message;

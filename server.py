@@ -734,11 +734,12 @@ class Handler(BaseHTTPRequestHandler):
                     body.get("story") or {})})
             elif path == "/api/assist/cast":
                 # Proposals only, like keyword notes.
-                self._json({"people": assist.cast_members(
+                people, unreadable = assist._cast_members(
                     body.get("story") or {},
                     "story" if body.get("mode") == "story" else "ask",
                     str(body.get("want") or ""),
-                    body.get("seen") or [])})
+                    body.get("seen") or [])
+                self._json({"people": people, "unreadable": unreadable})
             elif path == "/api/assist/keywords":
                 # Proposals only. The editor shows them as cards; accepting one adds
                 # it to the unsaved story, and nothing is written until Save.

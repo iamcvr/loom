@@ -324,7 +324,9 @@ def _kw_context(story: dict, have: list[dict], seen: list[str]) -> str:
     return "\n\n".join(parts)
 
 
-_KW_SPLIT = re.compile(r"^\s*={3,}\s*", re.M)
+# "=== Name" as asked, and the two headings the model drifts to instead: "### Name" and
+# a line that is only "**Name**". A miss here empties the whole reply, not one entry.
+_KW_SPLIT = re.compile(r"^\s*(?:={3,}|#{2,4}(?=\s)|(?=\*\*[^*\n]+\*\*\s*$))\s*", re.M)
 
 _ARTICLE = re.compile(r"^(the|a|an|her|his|their|its|my|your|our)\s+", re.I)
 # Words that name a kind of thing rather than this thing. "Pinecrest Park" may trigger
@@ -555,7 +557,8 @@ def _parse_cast(text: str, notes: list[dict]) -> list[dict]:
                 f[cur] += " " + ln.strip()      # a wrapped tag list or note
         if not name or not f["portrait"]:
             continue
-        aliases = [a.strip() for a in f["aka"].split(",")
+        aka = re.sub(r"\([^)]*\)", "", f["aka"])           # "Moira (first name only)"
+        aliases = [a.strip() for a in aka.split(",")
                    if a.strip() and a.strip().lower() != name.lower()
                    and len(a.split()) <= 3      # a name, not a sentence about names
                    and not re.match(r"(none|n/?a|unknown|not given|none given|-)\b", a.strip(), re.I)][:4]
@@ -588,6 +591,11 @@ def _parse_cast(text: str, notes: list[dict]) -> list[dict]:
 
 def cast_members(story: dict, mode: str = "story", want: str = "",
                  seen: list | None = None) -> list[dict]:
+    return _cast_members(story, mode, want, seen)[0]
+
+
+def _cast_members(story: dict, mode: str = "story", want: str = "",
+                  seen: list | None = None) -> tuple[list[dict], bool]:
     """Proposed cast. "story" lists people already written but not cast; "ask" makes
     who the author described, or a few the story needs if they described no one."""
     story = story or {}
@@ -607,6 +615,14 @@ def cast_members(story: dict, mode: str = "story", want: str = "",
     notes = [k for k in (story.get("keywords") or []) if isinstance(k, dict)]
     taken = {c.get("name", "").lower() for c in (story.get("cast") or [])} | {s.lower() for s in seen}
     people = [c for c in _parse_cast(out, notes) if c["name"].lower() not in taken]
+    if mode == "story":
+        # "From your story" is a claim the card shows the author, so it is checked: the
+        # name must appear in what they wrote ("Tormund" did not), and an entry named
+        # "The Banshee Sisters" is a group, which the prompt already forbids.
+        written = _story_names(story)
+        people = [c for c in people
+                  if c["from"] == "story" and not c["name"].lower().startswith("the ")
+                  and any(w in written for w in _name_words(c["name"]))]
     if mode != "story":
         # Asked for new people; one the model pulled back in from the story is not that,
         # and comes with whatever surname it gave them. Nor is one it relabelled "new"
@@ -619,4 +635,12 @@ def cast_members(story: dict, mode: str = "story", want: str = "",
             w in written and w not in asked for w in _name_words(c["name"]))]
     if stop and stop[-1] == "max_tokens" and people:
         people.pop()
-    return people
+    if not people and out.strip():
+        # Kept for diagnosis: an empty result is otherwise indistinguishable from "no
+        # one new", and the reply is gone once this returns.
+        print(f"[assist] cast ({mode}): nothing usable in a {len(out)}-char reply:\n"
+              + out[:3000], flush=True)
+    # Unreadable: the model said something, and none of it survived as a person. Whether
+    # that is a format miss or everyone being filtered as already cast, the honest
+    # message is "try again", not "there is no one".
+    return people, bool(out.strip()) and not _parse_cast(out, [])
