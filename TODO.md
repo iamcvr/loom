@@ -15,32 +15,50 @@ changing shape underneath them.
 
 ---
 
-## v1 — finish the engine
+## What is left
 
-Engine work is complete (§§1-5 and 9, in Done below), and v1.1, v1.2 and v1.4 have
-landed since. What stands between here and a release candidate is the documentation,
-the mobile pass, and one default that is wrong out of the box.
+Four items. The first is a bug that only a stranger hits; the rest are the
+documentation and polish that a release needs.
 
-**Blocker for a fresh clone (§8):** the shipped defaults are `num_ctx` 8192 with
-`max_tokens` 4000, leaving 12,544 characters of budget against layer floors needing
-15,600. `settings.update()` validates the whole state, so a new install cannot save
-ANY setting until this changes. 4000 is the wrong number regardless — measured
-replies average about 700 tokens and never reached a 1,200 ceiling across twelve
-turns, so the default reserves six times what replies use out of the smallest window
-loom ships with.
+### 1. The shipped defaults do not fit their own layer floors
 
----
+`num_ctx` 8192 with `max_tokens` 4000 leaves 12,544 characters of budget against
+layer floors needing 15,600. `settings.update()` validates the whole state, so a
+fresh clone **cannot save any setting at all** until this changes — which is the
+first thing a new user does, and it presents as "the app is broken".
 
-## Anytime
+4000 is the wrong number regardless of the window. Measured replies average about
+700 tokens and never reached a 1,200 ceiling across twelve turns, so the default
+reserves roughly six times what replies actually use, out of the smallest window
+loom ships with. Fixing the reply ceiling fixes the arithmetic; raising the window
+as well is a separate judgement about what hardware to assume.
 
-### 6. Repo hygiene
+### 2. First-install setup guide
 
-- ~~`__pycache__/` needs a `.gitignore`~~ — done
-- ~~no git remote configured~~ — done
-- `story.py:628` cites `~/Projects/CLAUDE.md` in a docstring: a local dev
-  artifact that will mean nothing to anyone else
+**There is no path from `git clone` to a working loom.** `PROSE.model` and
+`UTILITY.model` default to `""` on purpose — no model name is right for every host
+— so a fresh clone starts with nothing configured and nothing telling the user
+what to do about it.
 
-### 10. Mobile
+Needs to cover, in order:
+
+- prerequisites: ollama running, and at least one chat model pulled
+- how to pick a prose model, and what size is realistic for their hardware
+- the embedding model (`nomic-embed-text`) — long-term memory degrades to recency
+  ordering without it
+- the utility model, and that pointing it at the **same** model as prose avoids
+  ollama swapping a multi-GB model in and out between lanes
+- `PROSE.num_ctx`, which is the single knob the whole character budget derives from
+- `LOOM_OLLAMA_URL` / `LOOM_EMBED_URL` / `LOOM_IMAGE_URL` / `LOOM_STATE` /
+  `LOOM_STORIES`, and `PYTHONUNBUFFERED=1` for a systemd unit
+- images are optional, and what you lose without them
+
+Open question worth deciding first: should first run **prompt** rather than
+document? An unconfigured loom fails at the first turn with a provider error, which
+is a poor first impression. A setup screen listing what ollama actually holds would
+beat any README section.
+
+### 3. Mobile
 
 The phone pass on 2026-10-05 fixed the structural faults: the settings nav ate half
 the screen, fixed widths overflowed, dialogs were letterboxed, tap targets were
@@ -51,55 +69,26 @@ phone — the editor's repeatable sections, the chapter and lorebook dialogs, th
 ledger, the arc pane, and the portrait rows added since. That needs a pass with a
 phone in hand, screen by screen, rather than another guess from the stylesheet.
 
+### 4. Repo hygiene
+
+`story.py:628` cites a path under the author's home directory in a docstring, which
+will mean nothing to anyone else.
+
 ---
 
-## Release prep — only once v1 is settled
-
-### 7. Final README pass
-
-The README was de-staled on 2026-10-05 — the frontier providers, the
-refusal-fallback section, the `fallback` SSE event and the `claude-haiku-4-5`
-example are all gone, and "Running it" now documents the native systemd
-deployment alongside Docker.
-
-What is left is a **final pass once v1 is settled**, because §§1–5 will change
-the engine underneath it. Specifically, re-check:
-
-- the `## Model routing` section against whatever the provider story ends up being
-- the `## The context budget arbiter` section if §3 changes what the budget means
-  (characters of prompt vs a latency target)
-- `## Settings` against the knob list, which lost six knobs in the strip and may
-  gain some in §1
-- the internal network details still in the examples — `192.168.5.249`,
-  `192.168.5.234`, `172.19.0.1`, `atlas`, `solos` — which are fine in a private
-  repo and map the LAN in a public one
-
-### 8. First-install setup guide
-
-**There is no path from `git clone` to a working loom.** `PROSE.model` and
-`UTILITY.model` now default to `""` on purpose — no model name is right for every
-host, and the old defaults (`claude-sonnet-5`, `claude-haiku-4-5`) would be
-actively broken on a local-only build. So a fresh clone starts with no model
-configured and nothing tells the user what to do about it.
-
-Needs to cover, in order:
-
-- prerequisites: ollama running, and at least one chat model pulled
-- how to pick a prose model, and what size is realistic for their hardware
-- the embedding model (`nomic-embed-text`) — long-term memory degrades to recency
-  ordering without it
-- the utility model, and that pointing it at the **same** model as prose avoids
-  ollama swapping a multi-GB model in and out between lanes
-- `num_ctx` vs `BUDGET_TOTAL`, and the arithmetic that relates them (see §1)
-- `LOOM_OLLAMA_URL` / `LOOM_EMBED_URL` / `LOOM_STATE` / `LOOM_STORIES`
-
-Open question: should first run **prompt** rather than document? An unconfigured
-loom currently fails at the first turn with a provider error, which is a poor
-first impression. A setup screen that lists what ollama actually holds would be
-better than any README section.
-
-
 ## Done
+
+The numbering below is historical — these were §§1-9 when they were open.
+
+### ~~Final README pass~~ — 2026-10-05
+
+Rewritten against what actually shipped: the module map had drifted by a third and
+was missing three modules, images documented a ComfyUI node graph that no longer
+exists, and the budget section described a `BUDGET_TOTAL` that was replaced by the
+single `num_ctx` knob. The author's host names, home-directory paths and LAN
+addresses are out of it, which is what made it unpublishable rather than merely
+stale.
+
 
 Numbers are kept as they were so older cross-references still resolve.
 
