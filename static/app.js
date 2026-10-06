@@ -2686,11 +2686,19 @@ function secOpenings(d) {
           field('Id', txt(it, 'id', 'out-of-a-clear-sky'), { req: true, cls: 'narrow' })),
       // Named for who reads them, because that is the whole difference. The YAML keys
       // (prologue, opening_scene) are unchanged so no story file breaks.
+      assistButton('prologue', 'Write the first page\u2026', it,
+        'Writes it as a scene from your world and rules, or rewrites what you put in the '
+        + 'box. Second person, a couple of people on the page, ends on your move.'),
       field('First page', area(it, 'prologue', 9, 'The first thing you read when you start.'),
         { req: true, count: true,
           hint: 'Shown once, as the first message of the session. After that it is ordinary '
               + 'transcript, and on a long story it eventually scrolls out of the '
               + 'narrator\'s view \u2014 so anything it must never forget goes in the notes below.' }),
+      assistButton('opening_scene', 'Write the secret notes\u2026', it,
+        'Reads your first page and world, and writes what the narrator needs to keep '
+        + 'after the first page scrolls away \u2014 what has not happened yet, and what you '
+        + 'do not know.',
+        () => ({ prologue: it.prologue })),
       field('Narrator\'s secret notes', area(it, 'opening_scene', 5,
         'What is true about how this began that the player does not know yet.'), {
         hint: 'You never see these. The narrator reads them on every turn for the whole '
@@ -2885,13 +2893,18 @@ function setCastShot(slot, url, name) {
 /* A field's own AI help, above the field it writes into. The result replaces what is
    there in an unsaved editor, so the author accepts it by saving and rejects it by
    not saving. */
-function assistButton(fieldName, label, d, hint) {
+/* `obj` is whatever holds the field -- the story itself for World details, one opening
+   for the first page and its notes. `extra` adds context that lives on that object, such
+   as the first page the notes are written underneath. */
+function assistButton(fieldName, label, d, hint, extra = () => ({})) {
   const btn = el('button', 'ghost', label);
   const note = el('span', 'muted small assistNote');
 
   // The previous text survives the re-render on ED, so the rewrite can be taken back
-  // without discarding every other unsaved edit along with it.
-  const undo = ED.assistUndo && ED.assistUndo.field === fieldName ? ED.assistUndo : null;
+  // without discarding every other unsaved edit along with it. Matched on the object as
+  // well as the field name, because a story with three openings has three first pages.
+  const u = ED.assistUndo;
+  const undo = u && u.obj === d && u.field === fieldName ? u : null;
   if (undo) {
     note.append('Rewritten. ');
     const back = el('a', 'assistUndo', 'Undo');
@@ -2912,15 +2925,21 @@ function assistButton(fieldName, label, d, hint) {
     note.textContent = 'thinking\u2026';
     const tick = setInterval(() => { note.textContent = `thinking\u2026 ${++secs}s`; }, 1000);
     try {
+      const st = ED.data;
       const r = await api('/api/assist', {
         field: fieldName,
         text: d[fieldName] || '',
-        // The rules are sent as context so this cannot contradict or repeat them.
-        story: { name: d.name, tagline: d.tagline, rules: d.rules },
+        // Story-wide context comes from the story, not from `d`, which for an opening
+        // has no name, rules or world of its own.
+        story: {
+          name: st.name, tagline: st.tagline, rules: st.rules, details: st.details,
+          cast: (st.cast || []).map((c) => ({ name: c.name, short: c.short })),
+          ...extra(),
+        },
       });
       clearInterval(tick);
       if (r.text) {
-        ED.assistUndo = { field: fieldName, text: d[fieldName] || '' };
+        ED.assistUndo = { obj: d, field: fieldName, text: d[fieldName] || '' };
         d[fieldName] = r.text;
         touch();
         renderEditor();
