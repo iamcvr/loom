@@ -536,9 +536,15 @@ button.primary:disabled { opacity: .35; cursor: default; }
 /* ---------------------------------------------------------------- mobile */
 @media (max-width: 860px) {
   .panels {
-    position: fixed; inset: 48px 0 0 auto; width: min(340px, 88vw); z-index: 20;
+    /* Full height rather than offset below the header. The old `inset: 48px`
+       assumed a one-row bar; on a phone the bar wraps to two rows and the drawer
+       covered the second one -- which is where the button that opens it ends up,
+       so there was no way to close it short of reloading. Covering the header
+       outright is honest, and the drawer carries its own close button. */
+    position: fixed; inset: 0 0 0 auto; width: min(340px, 88vw); z-index: 40;
     transform: translateX(100%); transition: transform .2s; box-shadow: -10px 0 30px rgba(0,0,0,.4);
   }
+  .panels.open { padding-top: 44px; }
   .panels.open { transform: none; }
   .messages { padding: 16px 14px 6px; }
   .composer, .status, .suggestions { padding-left: 14px; padding-right: 14px; }
@@ -762,6 +768,21 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
   align-items: flex-start; }
 .castShotName { font-weight: 600; }
 .castShotBtns { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Only ever visible in the phone drawer; on a desktop the panel is a column that
+   is always there and has nothing to close. */
+.panelsClose {
+  display: none; position: absolute; top: 8px; right: 10px; z-index: 1;
+  width: 32px; height: 32px; padding: 0; line-height: 1; font-size: 20px;
+  background: var(--bg3); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+}
+.panelsClose:hover { border-color: var(--accent); }
+/* Shown at the width where .panels becomes a slide-over. This has to sit AFTER the
+   base rule above: the first attempt put it inside the 860px block higher up the
+   file, where `display: none` at equal specificity simply overrode it later on and
+   the button never appeared at all. */
+@media (max-width: 860px) { .panelsClose { display: block; } }
 
 .advisor { position: fixed; left: 14px; bottom: 14px; z-index: 60; }
 .advisor.collapsed .advisePanel { display: none; }

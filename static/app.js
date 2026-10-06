@@ -3115,6 +3115,9 @@ $('castClose').onclick = () => $('castDlg').close();
 $('castDlg').onclick = (e) => { if (e.target === $('castDlg')) $('castDlg').close(); };
 
 $('btnPanels').onclick = () => $('panels').classList.toggle('open');
+$('panelsClose').onclick = () => $('panels').classList.remove('open');
+// Tapping the story closes it, the way any drawer behaves.
+$('messages').addEventListener('click', () => $('panels').classList.remove('open'));
 $('btnBack').onclick = () => {
   $('app').classList.add('hidden');
   $('boot').classList.remove('hidden');
