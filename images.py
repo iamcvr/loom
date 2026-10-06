@@ -1,14 +1,16 @@
-"""ComfyUI image generation, entirely off the turn loop.
+"""Image generation, entirely off the turn loop.
 
 A single background worker drains a queue. Nothing here is ever awaited by a
 reply: prose streams immediately and images arrive when they arrive. A render
-takes 20-40s on the 4070 and must never be in the critical path.
+takes 20-40 s on a 4070 and 43 s on a Strix Halo iGPU, and must never be in the
+critical path.
 
 Portraits are cached per character name forever. Scene art is debounced by
 config.SCENE_MIN_TURN_GAP so a chatty stretch doesn't queue twenty renders.
 """
 from __future__ import annotations
 
+import base64
 import json
 import queue
 import random
@@ -16,7 +18,6 @@ import threading
 import time
 import unicodedata
 import urllib.error
-import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any, Optional
@@ -32,70 +33,54 @@ _state: dict[str, Any] = {"queued": 0, "rendering": None, "last_error": None, "d
 _last_scene_turn: dict[int, int] = {}
 
 
-# ---------------------------------------------------------------- comfy client
+# ---------------------------------------------------------------- image server
 
 
-def _post(path: str, payload: dict) -> dict:
-    url = config.COMFY_URL.rstrip("/") + path
-    req = urllib.request.Request(
-        url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}
-    )
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.loads(r.read().decode())
+def _render(prompt: str, size: dict, seed: int, prefix: str = "", checkpoint: str = "",
+            negative: str = "", timeout: int = 600) -> bytes:
+    """One image, synchronously, as PNG bytes.
 
+    Speaks the AUTOMATIC1111 `/sdapi/v1/txt2img` shape, which stable-diffusion.cpp's
+    server implements along with A1111 itself, Forge and reForge. That matters more
+    than elegance: loom is not tied to one backend, and anyone who already runs a
+    local image server probably already speaks this.
 
-def _get(path: str, timeout: int = 30) -> dict:
-    url = config.COMFY_URL.rstrip("/") + path
-    with urllib.request.urlopen(url, timeout=timeout) as r:
-        return json.loads(r.read().decode())
+    It replaced a ComfyUI client that submitted a hardcoded graph, polled /history
+    until the job appeared and then fetched the file over /view. This is one request
+    and one response, and the whole thing is shorter than the polling loop was.
 
+    `prefix` is vestigial -- ComfyUI needed an output filename prefix and nothing
+    here does. Kept so the caller does not have to change.
 
-def _fetch_image(filename: str, subfolder: str, kind: str) -> bytes:
-    q = urllib.parse.urlencode({"filename": filename, "subfolder": subfolder, "type": kind})
-    url = f"{config.COMFY_URL.rstrip('/')}/view?{q}"
-    with urllib.request.urlopen(url, timeout=60) as r:
-        return r.read()
-
-
-def _workflow(prompt: str, size: dict, seed: int, prefix: str, checkpoint: str = "",
-              negative: str = "") -> dict:
-    return {
-        "4": {"class_type": "CheckpointLoaderSimple",
-              "inputs": {"ckpt_name": checkpoint or config.COMFY_CHECKPOINT}},
-        "5": {"class_type": "EmptyLatentImage",
-              "inputs": {"width": size["width"], "height": size["height"], "batch_size": 1}},
-        "6": {"class_type": "CLIPTextEncode",
-              "inputs": {"text": prompt, "clip": ["4", 1]}},
-        "7": {"class_type": "CLIPTextEncode",
-              "inputs": {"text": negative or config.IMG_NEGATIVE, "clip": ["4", 1]}},
-        "3": {"class_type": "KSampler",
-              "inputs": {"seed": seed, "steps": size["steps"], "cfg": size["cfg"],
-                         "sampler_name": "euler_ancestral", "scheduler": "normal",
-                         "denoise": 1.0, "model": ["4", 0], "positive": ["6", 0],
-                         "negative": ["7", 0], "latent_image": ["5", 0]}},
-        "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
-        "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix, "images": ["8", 0]}},
+    `checkpoint` is accepted and ignored: an sd-server process loads one model at
+    startup and this API cannot switch it per request, so a story's own checkpoint
+    field has no effect until there is a way to honour it. Silently rendering in the
+    wrong model would be worse than this comment.
+    """
+    body = {
+        "prompt": prompt,
+        "negative_prompt": negative,
+        "width": int(size.get("width", 768)),
+        "height": int(size.get("height", 1024)),
+        "steps": int(config.IMG_STEPS),
+        "cfg_scale": float(config.IMG_CFG),
+        "sampler_name": config.IMG_SAMPLER,
+        "clip_skip": int(config.IMG_CLIP_SKIP),
+        "seed": int(seed),
+        "batch_size": 1,
     }
-
-
-def _render(prompt: str, size: dict, seed: int, prefix: str, checkpoint: str = "",
-            negative: str = "", timeout: int = 300) -> bytes:
-    pid = _post("/prompt", {"prompt": _workflow(prompt, size, seed, prefix,
-                                                checkpoint, negative)})["prompt_id"]
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        try:
-            hist = _get(f"/history/{pid}")
-        except urllib.error.URLError:
-            time.sleep(2)
-            continue
-        if pid in hist:
-            for node in hist[pid].get("outputs", {}).values():
-                for img in node.get("images", []):
-                    return _fetch_image(img["filename"], img.get("subfolder", ""), img.get("type", "output"))
-            raise RuntimeError("comfy finished with no image")
-        time.sleep(2)
-    raise TimeoutError(f"render timed out after {timeout}s")
+    url = config.IMAGE_URL.rstrip("/") + "/sdapi/v1/txt2img"
+    req = urllib.request.Request(
+        url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+    # Generous: 20 s on a 4070, measured 43 s on a Strix Halo iGPU, and a machine
+    # slower than either should fail because it is broken rather than because the
+    # client gave up on it.
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        out = json.loads(r.read().decode())
+    images = out.get("images") or []
+    if not images:
+        raise RuntimeError("image server returned no image")
+    return base64.b64decode(images[0])
 
 
 # ---------------------------------------------------------------- worker

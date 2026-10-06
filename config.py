@@ -293,8 +293,20 @@ IMAGES_ENABLED = os.environ.get("LOOM_IMAGES", "1") == "1"
 # Same reasoning as OLLAMA_URL: default to this host. A containerised loom
 # reaches ComfyUI on the host via the bridge gateway, whose address is
 # deployment-specific, so that belongs in compose rather than baked in here.
-COMFY_URL = os.environ.get("LOOM_COMFY_URL", "http://127.0.0.1:8188")
+# The image server. loom speaks the AUTOMATIC1111 /sdapi/v1 shape, which
+# stable-diffusion.cpp's sd-server implements, as do A1111, Forge and reForge, so
+# this is not tied to one backend. sd-server's own default port is 1234.
+IMAGE_URL = os.environ.get("LOOM_IMAGE_URL", "http://127.0.0.1:1234")
 COMFY_CHECKPOINT = "waiIllustrious.safetensors"
+
+# Sampling. Measured on a Strix Halo iGPU at 768x1024 -- see MEASUREMENTS.md. 24
+# steps with no flash attention was chosen over faster settings on looks:
+# --diffusion-fa renders flat and 16 steps drops fingers. 43 s a render, which is
+# 20 minutes for a 28-expression set.
+IMG_STEPS = 24
+IMG_CFG = 5.0
+IMG_SAMPLER = "euler_a"
+IMG_CLIP_SKIP = 2
 
 IMG_PORTRAIT = {"width": 832, "height": 1216, "steps": 30, "cfg": 6.0}
 IMG_SCENE = {"width": 1216, "height": 832, "steps": 28, "cfg": 6.0}
