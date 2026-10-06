@@ -29,11 +29,18 @@ import config
 ASK_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
+        # `learned` comes first and is required for one reason: without it the model
+        # re-asks questions the author has already answered, word for word. Measured
+        # -- a rich two-paragraph answer covering tone, cast and setting produced the
+        # same three questions again on the next turn. Making it write down what it
+        # now knows, before it is allowed to ask anything, is what breaks the loop.
+        "learned": {"type": "array", "maxItems": 10, "items": {"type": "string"}},
+        "still_needed": {"type": "array", "maxItems": 5, "items": {"type": "string"}},
         "reply": {"type": "string"},
-        "questions": {"type": "array", "items": {"type": "string"}},
+        "questions": {"type": "array", "maxItems": 3, "items": {"type": "string"}},
         "ready": {"type": "boolean"},
     },
-    "required": ["reply", "questions", "ready"],
+    "required": ["learned", "still_needed", "reply", "questions", "ready"],
 }
 
 # What CORE_RULES already covers. The single most valuable thing in these prompts:
@@ -53,9 +60,20 @@ story must NOT restate any of it:
 _INTERVIEW = """You are interviewing someone who wants to play in a story you are about
 to write for them. They are the author and the player both.
 
-Ask in small groups -- three or four questions at a time, conversationally, never as a
-form. Infer freely and say what you inferred so they can correct it. Never ask something
-their last answer already told you.
+Work in this order, every turn:
+
+1. `learned` -- everything you now know, one short line each, from the WHOLE
+   conversation and not just the last message. Include what you inferred.
+2. `still_needed` -- only what is genuinely missing after that.
+3. `questions` -- at most three, drawn ONLY from `still_needed`.
+
+**Never ask about anything in `learned`.** Re-asking a question the author already
+answered is the worst thing you can do here: it reads as not listening, and it is the
+single most common way this goes wrong. Before you write a question, check it against
+`learned` and against every question already in the transcript. If it appears in
+either, drop it.
+
+Be conversational, not a form. Say what you inferred so they can correct it.
 
 What you need before you can write it:
 
@@ -76,10 +94,11 @@ What you need before you can write it:
                  the player decides their character dies; or nothing truly bad
   powers         whether this world has named powers, and what it calls them
 
-Set `ready` true once you could write a specific, opinionated story from what you have
--- not once you have asked everything. Two good exchanges is usually enough, and an
-author who answers thoroughly should not be made to answer again. Being over-thorough
-here is its own failure: people abandon interviews. A rich first answer can leave you ready after one
+Set `ready` true once you could write a specific, opinionated story -- NOT once you
+have asked everything on the list. The world, the cast and the feel are enough; the
+rest you may infer and state as an inference. Two good exchanges is usually plenty,
+and if `still_needed` is down to details you could reasonably decide yourself, you are
+ready. Being over-thorough is its own failure: people abandon interviews. A rich first answer can leave you ready after one
 exchange. When you set it, say in `reply` what you understood, in two short paragraphs,
 so they can correct you before anything is written.
 
@@ -102,7 +121,13 @@ def _transcript(history: list[dict]) -> str:
 def ask(history: list[dict]) -> dict:
     """One turn of the interview."""
     out = brain.utility(_INTERVIEW % _transcript(history), ASK_SCHEMA)
+    # `learned` is returned, not just required. Writing it is what stops the model
+    # re-asking answered questions, and it costs real time -- about 46s a turn
+    # against 8s without it. Showing it back makes that a running summary the author
+    # can correct rather than latency they cannot see the point of.
     return {
+        "learned": [str(x).strip() for x in (out.get("learned") or []) if str(x).strip()],
+        "still_needed": [str(x).strip() for x in (out.get("still_needed") or []) if str(x).strip()],
         "reply": str(out.get("reply") or "").strip(),
         "questions": [str(q).strip() for q in (out.get("questions") or []) if str(q).strip()],
         "ready": bool(out.get("ready")),

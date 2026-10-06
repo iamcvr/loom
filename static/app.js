@@ -2412,6 +2412,15 @@ function ivSay(role, text) {
   b.scrollTop = b.scrollHeight;
 }
 
+function ivKnown(learned) {
+  const box = $('ivKnown');
+  box.innerHTML = '';
+  if (!learned.length) { box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  box.append(el('div', 'ivKnownHead', 'What it has so far'));
+  learned.forEach((x) => box.append(el('div', 'ivKnownRow', x)));
+}
+
 async function ivTurn() {
   const t = $('ivInput').value.trim();
   if (!t || IV.busy) return;
@@ -2425,6 +2434,9 @@ async function ivTurn() {
     const r = await api('/api/interview', { history: IV.history });
     const said = [r.reply, ...(r.questions || [])].filter(Boolean).join('\n\n');
     ivSay('assistant', said || '(no reply)');
+    // What it believes it has, shown so it can be corrected. Writing this is what
+    // stops it re-asking answered questions, so the author may as well see it.
+    ivKnown(r.learned || []);
     IV.history.push({ role: 'assistant', text: said });
     IV.ready = !!r.ready;
     $('ivWrite').disabled = !IV.ready;

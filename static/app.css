@@ -881,6 +881,12 @@ body[data-mode="raw"] .panel:has(#ledgerActive) { display: block; }
   color: var(--muted); font-weight: 600; }
 .iv-user .ivWho { color: var(--accent2); }
 .ivText { line-height: 1.6; white-space: pre-wrap; }
+.ivKnown { padding: 10px 16px; border-top: 1px solid var(--line); background: var(--bg2);
+  max-height: 22vh; overflow-y: auto; }
+.ivKnownHead { font-size: 10.5px; text-transform: uppercase; letter-spacing: .12em;
+  color: var(--muted); font-weight: 600; margin-bottom: 5px; }
+.ivKnownRow { font-size: 12.5px; line-height: 1.5; opacity: .85; }
+.ivKnownRow::before { content: '\2022 '; opacity: .5; }
 .ivRow { display: flex; gap: 8px; padding: 0 16px 12px; }
 .ivRow textarea {
   flex: 1; resize: none; background: var(--bg3); color: var(--fg);
