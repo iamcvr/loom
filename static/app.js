@@ -207,15 +207,23 @@ async function pollCandidates(token, shots, status, gen) {
 
   d.images.forEach((name) => {
     if (shots.querySelector(`[data-name="${name}"]`)) return;
+    // Click picks. Seeing it properly needs its own control, because a 130px tile
+    // is enough to tell that a face rendered and not enough to decide you want it.
+    const cell = el('div', 'pcShot');
+    cell.dataset.name = name;
     const img = el('img');
-    img.dataset.name = name;
     img.src = '/media/' + name;
+    img.alt = 'portrait option';
     img.onclick = () => {
       PC.pick = PC.pick === name ? null : name;
-      shots.querySelectorAll('img').forEach(
+      shots.querySelectorAll('.pcShot').forEach(
         (x) => x.classList.toggle('on', x.dataset.name === PC.pick));
     };
-    shots.append(img);
+    const zoom = el('button', 'pcZoom', '\u2922');
+    zoom.title = 'See it full size';
+    zoom.onclick = (e) => { e.stopPropagation(); lightbox('/media/' + name, 'Option'); };
+    cell.append(img, zoom);
+    shots.append(cell);
   });
 
   const left = d.total - d.done;
@@ -2626,9 +2634,7 @@ function offerCastPortraits() {
     const row = el('div', 'castShotRow');
     const img = el('div', 'castShotImg');
     if (c.portrait) {
-      const i = el('img');
-      i.src = `/story-img/${ED.id}/${c.portrait}?t=` + Date.now();
-      img.append(i);
+      setCastShot(img, `/story-img/${ED.id}/${c.portrait}?t=` + Date.now(), c.name);
     }
     const meta = el('div', 'castShotMeta');
     meta.append(el('div', 'castShotName', c.name));
@@ -2644,6 +2650,19 @@ function offerCastPortraits() {
   $('castShotStatus').textContent =
     `${missing.length} of ${todo.length} without a portrait`;
   $('castShotDlg').showModal();
+}
+
+/* A 90px thumbnail is enough to see that something rendered and nowhere near enough
+   to decide whether it is the right face. Clicking opens the full image, which is
+   the only way to judge it before keeping it. */
+function setCastShot(slot, url, name) {
+  slot.innerHTML = '';
+  const i = el('img');
+  i.src = url;
+  i.alt = name;
+  i.title = 'Click to see it full size';
+  i.onclick = () => lightbox(url, name);
+  slot.append(i);
 }
 
 async function drawOne(c, img, st, roll) {
@@ -2662,11 +2681,8 @@ async function drawOne(c, img, st, roll) {
         const r = await api('/api/cast-portrait',
           { story: ED.id, name: c.name, candidate: d.images[0] });
         c.portrait = r.portrait;
-        img.innerHTML = '';
-        const i = el('img');
-        i.src = r.url + '?t=' + Date.now();
-        img.append(i);
-        st.textContent = 'done';
+        setCastShot(img, r.url + '?t=' + Date.now(), c.name);
+        st.textContent = 'done \u2014 click it to see it full size';
         roll.textContent = 'Re-roll';
         // Written straight to the story file: the portrait is already on disk and
         // a cast entry pointing at nothing would be worse than an extra save.
