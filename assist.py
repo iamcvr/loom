@@ -406,3 +406,217 @@ def keyword_notes(story: dict, mode: str = "first", seen: list | None = None) ->
     if stop and stop[-1] == "max_tokens" and notes:
         notes.pop()
     return notes
+
+
+# ---------------------------------------------------------------- cast
+#
+# Same shape as keyword notes: proposals as cards, accepted one at a time. A cast
+# entry is deliberately thin -- name, aliases, how narration refers to them, portrait
+# tags -- because who a person IS lives in a keyword note. So each proposal also
+# carries a note body, which the editor offers to add when no note covers them yet.
+
+_CAST_FRAME = """You are helping someone build the cast list for an interactive-fiction story.
+
+The player is never in the cast. They choose who they are when they start; never
+propose them, and never give anyone a relationship that defines who the player is.
+
+First write a plan, one numbered line per person: gender, what they are, their role.
+Then the entries, in the same order, each in exactly this form:
+
+PLAN:
+1. female, fairy, nurse at the clinic
+2. male, orc, bartender
+
+=== Full Name
+from: story
+kind: what they are -- human, orc, fairy, and so on
+aka: First name, nickname
+seen as: how narration describes them before the player learns their name
+portrait: comma-separated image tags
+note: 2-4 sentences for the narrator: who they are, what they do, what they want, how
+they behave. Plain fact, present tense.
+
+- ONE PERSON PER ENTRY. A group is never an entry; its members are, each on their own.
+- "from" is "story" for someone the author already wrote, "new" for someone you made.
+- "aka": the names people would actually call them -- first name, surname, a nickname.
+- "seen as": under twelve words, visual, e.g. "the floating head with the sharp tongue".
+- "portrait": booru-style tags for an image generator, short tags only, never phrases or
+  sentences. The first tag is exactly one of 1girl (any woman or girl, of any age), 1boy
+  (any man or boy, of any age) or 1other (neither) --
+  then solo, then whatever makes their body unusual -- this comes BEFORE everything
+  else, because an image model draws an ordinary human otherwise: "disembodied head,
+  floating head, no body", "green skin, goblin, pointed ears", "dragon horns, scales".
+  Their kind is always one of the tags ("orc", "fairy", "goblin", "human"). Then age,
+  build, skin, hair, eyes, expression, clothing. No quality tags and no art-style
+  tags; those are added for them.
+- For someone the author wrote, keep every fact they gave and contradict nothing, and
+  NEVER invent a name for them: no first name, no surname, no nickname the author did
+  not write. "aka" holds only names that appear in the author's text."""
+
+_CAST_STORY = """List every individual person the author has already NAMED -- in the rules,
+the world, the openings and the keyword notes -- who is not in the cast yet. Mark them
+"from: story". At most 8.
+
+A person with their own keyword note still needs a cast entry: the note is what the
+narrator knows about them, the cast entry is their name and portrait. Start with whoever
+the story is most about.
+
+Include people mentioned only in passing inside another note -- a librarian named in a
+library's note, a bartender named in a bar's note. Read every note for them.
+
+Skip unnamed groups ("three banshee sisters") and anyone the author did not name. If
+there is no one, reply with nothing."""
+
+_CAST_ASK = """The author wants these characters:
+
+{want}
+
+Create exactly what they asked for: their counts, genders, kinds and roles. Your plan
+must match their request line for line -- count the men and the women before you
+write a single entry. Where they
+gave a name, use it; where they did not, choose one that fits the world. Make each
+person belong here -- a job, a place and a want that follow from the world as written.
+
+Every one of them is someone NEW. People the story already has are not part of this
+request; do not include them.
+
+Choose what each person IS from the kinds of people this world actually has, following
+its own patterns -- if the world says who holds which jobs, a person in that job is
+that kind. Do not default to human unless they asked for one or the world is human.
+Mark them "from: new"."""
+
+_CAST_FILL = """Propose 3 people this story will need, who are not in it yet: people the
+player would plausibly meet in the opening situation and the world around it. Choose what
+each person IS from the kinds of people this world has, following its own patterns; do
+not default to human. Mark them "from: new"."""
+
+
+def _cast_context(story: dict, seen: list[str]) -> str:
+    parts = [_kw_context({k: v for k, v in story.items() if k not in ("keywords", "cast")}, [], [])]
+    cast = [c for c in (story.get("cast") or []) if c.get("name")]
+    if cast:
+        parts.append("ALREADY IN THE CAST -- do not propose these again:\n" + "\n".join(
+            f"- {c['name']}" + (f" ({c['short']})" if c.get("short") else "") for c in cast[:30]))
+    notes = [k for k in (story.get("keywords") or []) if isinstance(k, dict)]
+    if notes:
+        # Fuller than for keyword suggestions: this is where people are described.
+        parts.append("The story's keyword notes:\n" + "\n".join(
+            f"- {k.get('title')}: " + (k.get("body") or "").strip().replace("\n", " ")[:600]
+            for k in notes[:30]))
+    if seen:
+        parts.append("Already offered to the author, do not offer again: " + ", ".join(seen[:60]))
+    return "\n\n".join(p for p in parts if p)
+
+
+_HONORIFIC = {"mr", "mrs", "ms", "miss", "dr", "doctor", "sir", "lady", "lord", "the"}
+
+
+def _name_words(name: str) -> list[str]:
+    return [w for w in re.findall(r"[a-z']+", name.lower()) if len(w) >= 3 and w not in _HONORIFIC]
+
+
+def _story_names(story: dict) -> set[str]:
+    """Capitalised words in everything the author wrote -- the names already in use."""
+    text = " ".join([story.get("rules") or "", story.get("details") or ""]
+                    + [(it.get("prologue") or "") + " " + (it.get("opening_scene") or "")
+                       for it in story.get("intros") or []]
+                    + [(k.get("title") or "") + " " + (k.get("body") or "")
+                       for k in story.get("keywords") or [] if isinstance(k, dict)]
+                    + [c.get("name") or "" for c in story.get("cast") or []])
+    return {w.lower() for w in re.findall(r"\b[A-Z][a-z']{2,}\b", text)}
+
+
+def _covered(name: str, notes: list[dict]) -> bool:
+    """Does an existing keyword note already describe this person?"""
+    words = {w for w in re.findall(r"[a-z']+", name.lower()) if len(w) >= 3}
+    for k in notes:
+        hay = (k.get("title") or "").lower() + " " + " ".join(k.get("keywords") or [])
+        if any(re.search(rf"\b{re.escape(w)}\b", hay) for w in words):
+            return True
+    return False
+
+
+def _parse_cast(text: str, notes: list[dict]) -> list[dict]:
+    import lorebook
+    out = []
+    for chunk in _KW_SPLIT.split(text)[1:]:
+        lines = chunk.strip().splitlines()
+        if not lines:
+            continue
+        name = " ".join(lines[0].strip(" *#=").split())
+        f = {"from": "new", "kind": "", "aka": "", "seen as": "", "portrait": "", "note": ""}
+        cur = None
+        for ln in lines[1:]:
+            m = re.match(r"\s*(from|kind|aka|seen as|portrait|note)\s*:\s*(.*)$", ln, re.I)
+            if m:
+                cur = m.group(1).lower()
+                f[cur] = m.group(2).strip()
+            elif cur in ("note", "portrait") and ln.strip():
+                f[cur] += " " + ln.strip()      # a wrapped tag list or note
+        if not name or not f["portrait"]:
+            continue
+        aliases = [a.strip() for a in f["aka"].split(",")
+                   if a.strip() and a.strip().lower() != name.lower()
+                   and len(a.split()) <= 3      # a name, not a sentence about names
+                   and not re.match(r"(none|n/?a|unknown|not given|none given|-)\b", a.strip(), re.I)][:4]
+        # The first tag is the image model's subject count. "1woman" is not one it knows.
+        prompt = re.sub(r"\s+", " ", f["portrait"]).strip().rstrip(",")
+        prompt = re.sub(r"^\s*1\s*(woman|female|lady)\b", "1girl", prompt, flags=re.I)
+        prompt = re.sub(r"^\s*1\s*(man|male|guy)\b", "1boy", prompt, flags=re.I)
+        # Without its kind as a tag an orc is drawn as a man with green skin.
+        kind = f["kind"].strip().strip(".").lower()
+        if kind and len(kind.split()) <= 3 and kind not in prompt.lower():
+            head, _, rest = prompt.partition(",")
+            if rest and re.match(r"\s*solo\b", rest):
+                _, _, rest = rest.partition(",")
+                head += ", solo"
+            prompt = f"{head}, {kind}," + rest if rest else f"{head}, {kind}"
+        trig = [name.lower()] + [a.lower() for a in aliases if len(a) >= 4]
+        out.append({
+            "name": name,
+            "short": f["seen as"].strip().rstrip("."),
+            "aliases": aliases,
+            "prompt": prompt,
+            "note": re.sub(r"\*\*([^*]+)\*\*", r"\1", f["note"]).strip(),
+            "keywords": lorebook._clean_keywords(trig, name),
+            "from": "story" if "story" in f["from"].lower() else "new",
+            "kind": f["kind"].strip().strip("."),
+            "has_note": _covered(name, notes),
+        })
+    return out
+
+
+def cast_members(story: dict, mode: str = "story", want: str = "",
+                 seen: list | None = None) -> list[dict]:
+    """Proposed cast. "story" lists people already written but not cast; "ask" makes
+    who the author described, or a few the story needs if they described no one."""
+    story = story or {}
+    seen = [str(s) for s in (seen or [])]
+    want = (want or "").strip()[:1500]
+    if mode == "story":
+        ask = _CAST_STORY
+    elif want:
+        ask = _CAST_ASK.format(want=want)
+    else:
+        ask = _CAST_FILL
+    system = _CAST_FRAME + "\n\n" + _cast_context(story, seen)
+    stop: list[str] = []
+    out = brain.prose(system, [{"role": "user", "content": ask}],
+                      spec={**config.PROSE, "temperature": 0.7 if mode == "story" else 0.85},
+                      on_stop=stop.append)
+    notes = [k for k in (story.get("keywords") or []) if isinstance(k, dict)]
+    taken = {c.get("name", "").lower() for c in (story.get("cast") or [])} | {s.lower() for s in seen}
+    people = [c for c in _parse_cast(out, notes) if c["name"].lower() not in taken]
+    if mode != "story":
+        # Asked for new people; one the model pulled back in from the story is not that,
+        # and comes with whatever surname it gave them. Nor is one it relabelled "new"
+        # under a borrowed name -- "Dr. Sarah Chen" for the story's Mrs. Chen -- so a
+        # new person sharing a name with anyone already written is dropped, unless the
+        # author typed that name in their request.
+        written = _story_names(story)
+        asked = want.lower()
+        people = [c for c in people if c["from"] == "new" and not any(
+            w in written and w not in asked for w in _name_words(c["name"]))]
+    if stop and stop[-1] == "max_tokens" and people:
+        people.pop()
+    return people

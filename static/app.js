@@ -2346,7 +2346,8 @@ async function saveSettings() {
 
 // assistUndo lives here rather than on the button: renderEditor() rebuilds the button.
 const ED = { id: '', data: null, section: 'Story', isNew: true, idTouched: false, dirty: false,
-             assistUndo: null, kwOffer: [], kwSeen: [] };
+             assistUndo: null, kwOffer: [], kwSeen: [],
+             castOffer: [], castSeen: [], castWant: '' };
 const ED_SECTIONS = ['Story', 'Openings', 'Stats', 'Keywords', 'Cast'];
 
 async function newStory() {
@@ -2359,6 +2360,9 @@ async function newStory() {
   ED.assistUndo = null;
   ED.kwOffer = [];
   ED.kwSeen = [];
+  ED.castOffer = [];
+  ED.castSeen = [];
+  ED.castWant = '';
   showEditor();
 }
 
@@ -2372,6 +2376,9 @@ async function editStory(id) {
   ED.assistUndo = null;
   ED.kwOffer = [];
   ED.kwSeen = [];
+  ED.castOffer = [];
+  ED.castSeen = [];
+  ED.castWant = '';
   showEditor();
   if (ED.data._problems?.length) showProblems(ED.data._problems);
 }
@@ -2757,6 +2764,17 @@ function secKeywords(d) {
    note joins the unsaved story like any hand-written one. Offers live on ED so they
    survive renderEditor(); every title offered goes into kwSeen so "More ideas" does
    not hand the same ones back. */
+function assistStory(d) {
+  return {
+    name: d.name, rules: d.rules, details: d.details,
+    intros: (d.intros || []).map((it) => ({
+      prologue: it.prologue, opening_scene: it.opening_scene })),
+    cast: (d.cast || []).map((c) => ({ name: c.name, short: c.short })),
+    keywords: (d.keywords || []).map((k) => ({
+      title: k.title, keywords: k.keywords, body: k.body })),
+  };
+}
+
 function keywordOffers(d) {
   const wrap = el('div', 'kwOffers');
   const note = el('span', 'muted small assistNote');
@@ -2771,14 +2789,7 @@ function keywordOffers(d) {
         const r = await api('/api/assist/keywords', {
           mode,
           seen: ED.kwSeen,
-          story: {
-            name: d.name, rules: d.rules, details: d.details,
-            intros: (d.intros || []).map((it) => ({
-              prologue: it.prologue, opening_scene: it.opening_scene })),
-            cast: (d.cast || []).map((c) => ({ name: c.name })),
-            keywords: (d.keywords || []).map((k) => ({
-              title: k.title, keywords: k.keywords, body: k.body })),
-          },
+          story: assistStory(d),
         });
         clearInterval(tick);
         const got = r.notes || [];
@@ -2835,6 +2846,7 @@ function secCast(d) {
   return [
     el('div', 'edEmpty', 'Characters the story can draw portraits for — and, just as ' +
       'importantly, the descriptions the extractor uses to work out who is who.'),
+    castOffers(d),
     repeatable(d.cast, {
       title: (c, i) => c.name || `Character ${i + 1}`,
       add: '+ Add a character',
@@ -2857,6 +2869,100 @@ function secCast(d) {
       ],
     }),
   ];
+}
+
+/* The keyword-note scaffolding again, for people. A cast entry is only a name, what
+   to call them and what they look like; who they ARE lives in a keyword note, so each
+   card offers to add one too -- ticked only when no existing note covers them. */
+function castOffers(d) {
+  const wrap = el('div', 'kwOffers');
+  const note = el('span', 'muted small assistNote');
+  const want = el('textarea');
+  want.rows = 2;
+  want.placeholder = 'Optional: who you want. "3 people, 1 male 2 female", or '
+    + '"a goblin landlady named Grizelda who runs my building".';
+  want.value = ED.castWant;
+  want.oninput = () => { ED.castWant = want.value; };
+
+  const ask = (mode, label) => {
+    const b = el('button', 'ghost', label);
+    b.onclick = async () => {
+      wrap.querySelectorAll('button').forEach((x) => { x.disabled = true; });
+      let secs = 0;
+      note.textContent = 'thinking…';
+      const tick = setInterval(() => { note.textContent = `thinking… ${++secs}s`; }, 1000);
+      try {
+        const r = await api('/api/assist/cast', {
+          mode, want: ED.castWant, seen: ED.castSeen, story: assistStory(d) });
+        clearInterval(tick);
+        const got = (r.people || []).map((p) => ({ ...p, withNote: !p.has_note && !!p.note }));
+        ED.castOffer.push(...got);
+        ED.castSeen.push(...got.map((p) => p.name));
+        if (got.length) { renderEditor(); return; }
+        note.textContent = mode === 'story'
+          ? 'everyone you have written is already in the cast' : 'nothing came back';
+      } catch (e) {
+        clearInterval(tick);
+        note.textContent = e.message;
+      }
+      wrap.querySelectorAll('button').forEach((x) => { x.disabled = false; });
+    };
+    return b;
+  };
+
+  const row = el('div', 'assistRow');
+  row.append(ask('story', 'Cast who is in my story…'),
+             ask('ask', 'Create who I described…'), note);
+  wrap.append(field('', want), field('', row, {
+    hint: 'The first finds the people already named in your rules, world, openings and '
+        + 'keyword notes. The second makes the people you describe in the box, or a few '
+        + 'the story will need if the box is empty. Nothing is kept unless you add it.' }));
+
+  const take = (p) => {
+    d.cast.push({ name: p.name, short: p.short, aliases: p.aliases, prompt: p.prompt });
+    if (p.withNote && p.note) {
+      d.keywords.push({ title: p.name, keywords: p.keywords, body: p.note, always: false });
+    }
+    ED.castOffer = ED.castOffer.filter((x) => x !== p);
+    touch();
+  };
+  if (ED.castOffer.length > 1) {
+    const all = el('button', 'ghost small', `Add all ${ED.castOffer.length}`);
+    all.onclick = () => { [...ED.castOffer].forEach(take); renderEditor(); };
+    wrap.append(all);
+  }
+  ED.castOffer.forEach((p) => {
+    const card = el('div', 'loreSug');
+    const head = el('div', 'lt', p.name);
+    head.append(el('span', 'kwFrom ' + (p.from === 'story' ? 'story' : 'new'),
+      (p.from === 'story' ? 'from your story' : 'new character')
+        + (p.kind ? ` \u00b7 ${p.kind}` : '')));
+    card.append(head);
+    if (p.short) card.append(el('div', 'lb', p.short));
+    if (p.aliases.length) card.append(el('div', 'lk', 'also: ' + p.aliases.join(', ')));
+    card.append(el('div', 'lk', p.prompt));
+    if (p.note) {
+      card.append(el('div', 'lb castNote', p.note));
+      const lab = el('label', 'muted small castWithNote');
+      const box = el('input');
+      box.type = 'checkbox';
+      box.checked = p.withNote;
+      box.onchange = () => { p.withNote = box.checked; };
+      lab.append(box, p.has_note
+        ? ' also add this as a keyword note (one already mentions them)'
+        : ' also add this as a keyword note, so the narrator knows who they are');
+      card.append(lab);
+    }
+    const acts = el('div', 'lacts');
+    const yes = el('button', 'primary small', 'Add');
+    yes.onclick = () => { take(p); renderEditor(); };
+    const no = el('button', 'ghost small', 'No');
+    no.onclick = () => { ED.castOffer = ED.castOffer.filter((x) => x !== p); renderEditor(); };
+    acts.append(yes, no);
+    card.append(acts);
+    wrap.append(card);
+  });
+  return wrap;
 }
 
 const ED_RENDER = { Story: secStory, Openings: secOpenings, Stats: secStats,

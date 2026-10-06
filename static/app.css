@@ -1010,3 +1010,6 @@ input[type=number]::-webkit-outer-spin-button {
    focus. Pinning the root while one is open is the only reliable stop. */
 html:has(dialog[open]) { overflow: hidden; }
 .kwOffers > button { align-self: flex-start; }
+.kwOffers textarea { width: 100%; }
+.castNote { border-left: 2px solid var(--line); padding-left: 8px; }
+.castWithNote { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
